@@ -1,21 +1,4 @@
 <!DOCTYPE html>
-// 強制將輸入轉換為字串型態，避免報錯
-let rawInput = args.shortcutParameter;
-let input = "";
-
-if (rawInput !== null && rawInput !== undefined) {
-    input = String(rawInput); 
-} else {
-    // 如果捷徑沒傳資料，改抓剪貼簿
-    input = Pasteboard.pasteString() || "";
-}
-
-// 現在可以使用 trim() 了
-if (input.trim() === "") {
-    Script.setShortcutOutput("錯誤：未偵測到座標資料");
-    Script.complete();
-} else {
-    // 剩下的代碼接在下面...
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
