@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX 16-Way Logic Generator</title>
+    <style>
+        :root { --primary: #007aff; --success: #34c759; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
+        .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .info { background: #e7f3ff; padding: 15px; border-radius: 12px; font-size: 14px; line-height: 1.6; margin-bottom: 20px; border-left: 5px solid var(--primary); }
+        textarea { width: 100%; height: 200px; border: 2px solid #ddd; border-radius: 12px; padding: 15px; font-family: "SF Mono", monospace; font-size: 14px; box-sizing: border-box; transition: border-color 0.3s; }
+        textarea:focus { border-color: var(--primary); outline: none; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        button { padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.1s, opacity 0.2s; }
+        button:active { transform: scale(0.98); }
+        .btn-main { background: var(--primary); color: white; }
+        .btn-copy { background: #8e8e93; color: white; }
+        #log { margin-top: 20px; font-size: 13px; color: #666; white-space: pre-line; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>📍 GPX 座標邏輯生成器</h2>
+    <div class="info">
+        <b>使用說明：</b><br>
+        1. 在下方貼入座標（格式：40.693,30.244 或帶空格皆可）<br>
+        2. 系統會自動執行 <b>TSP 最短路徑優化</b> 與 <b>重複點剔除</b><br>
+        3. 根據 16 條方位邏輯生成 5 點式圓形軌跡 (半徑 36m)
+    </div>
+
+    <textarea id="coordsInput" placeholder="請貼入原始座標清單..."></textarea>
+
+    <div class="btn-group">
+        <button class="btn-main" onclick="handleGenerate('download')">💾 生成並下載 GPX</button>
+        <button class="btn-copy" onclick="handleGenerate('copy')">📋 僅拷貝代碼</button>
+    </div>
+
+    <div id="log"></div>
+</div>
+
+<script>
+const RADIUS = 36;
+const LAT_M_PER_DEG = 111132;
+const RULES = {
+    "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225],
+    "NE_NW": [45, 135, "01", 225, 315], "NE_NE": [45, 135, "01", 225, 315],
+    "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135],
+    "NW_SW": [315, 45, "01", 135, 225], "NW_NW": [315, 225, "01", 135, 45],
+    "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315],
+    "SE_NE": [135, 225, "01", 315, 45], "SE_SE": [135, 45, "01", 315, 225],
+    "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45],
+    "SW_SE": [225, 315, "01", 45, 135], "SW_SW": [225, 135, "01", 45, 315]
+};
+
+function getQuadrant(curr, target) {
+    let dLat = target.lat - curr.lat;
+    let dLon = target.lon - curr.lon;
+    if (dLat >= 0 && dLon >= 0) return "NE";
+    if (dLat >= 0 && dLon < 0)  return "NW";
+    if (dLat < 0 && dLon < 0)   return "SW";
+    return "SE";
+}
+
+function handleGenerate(mode) {
+    const input = document.getElementById('coordsInput').value;
+    const logDiv = document.getElementById('log');
+    
+    // 1. 解析與去重
+    let raw = [];
+    input.split('\n').forEach(line => {
+        let p = line.split(/[,|\s]+/);
+        if (p.length >= 2) {
+            let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                if (!raw.some(c => c.lat.toFixed(6) === lat.toFixed(6) && c.lon.toFixed(6) === lon.toFixed(6))) {
+                    raw.push({lat, lon});
+                }
+            }
+        }
+    });
+
+    if (raw.length === 0) return alert("請輸入有效座標");
+
+    // 2. TSP 優化
+    let centers = [];
+    let current = raw.shift();
+    centers.push(current);
+    while (raw.length > 0) {
+        let closestIdx = 0, minDist = Infinity;
+        raw.forEach((c, idx) => {
+            let d = Math.hypot(c.lat - current.lat, (c.lon - current.lon) * Math.cos(current.lat * Math.PI/180));
+            if (d < minDist) { minDist = d; closestIdx = idx; }
+        });
+        current = raw.splice(closestIdx, 1)[0];
+        centers.push(current);
+    }
+
+    // 3. 邏輯套用
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Maker-Web">';
+    centers.forEach((center, i) => {
+        let prev = i > 0 ? centers[i-1] : null;
+        let next = i < centers.length - 1 ? centers[i+1] : null;
+        let qP = prev ? getQuadrant(center, prev) : (next ? getQuadrant(center, next) : "NE");
+        let qN = next ? getQuadrant(center, next) : qP;
+        let path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
+
+        path.forEach(step => {
+            let fLat, fLon;
+            if (step === "01") { fLat = center.lat; fLon = center.lon; }
+            else {
+                let rad = step * Math.PI / 180;
+                fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
+                fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
+            }
+            gpx += `\n<wpt lat="${fLat.toFixed(6)}" lon="${fLon.toFixed(6)}"><name>Z${(i+1).toString().padStart(2,'0')}-${step}</name></wpt>`;
+        });
+    });
+    gpx += '\n</gpx>';
+
+    // 4. 輸出
+    if (mode === 'download') {
+        const blob = new Blob([gpx], {type: 'application/gpx+xml'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `route_${new Date().getTime()}.gpx`;
+        a.click();
+        logDiv.innerText = `成功：處理了 ${centers.length} 個中心點，已開始下載。`;
+    } else {
+        navigator.clipboard.writeText(gpx).then(() => {
+            alert("GPX 代碼已拷貝！");
+            logDiv.innerText = `成功：處理了 ${centers.length} 個中心點，代碼已複製。`;
+        });
+    }
+}
+</script>
+</body>
+</html>
