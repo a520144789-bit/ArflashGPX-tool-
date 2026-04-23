@@ -87,18 +87,18 @@ function handleGenerate(mode) {
 
     if (raw.length === 0) return alert("請輸入有效座標");
 
-    // TSP 優化 (最近鄰)
-    let centers = [];
-    let current = raw.shift();
-    centers.push(current);
-    while (raw.length > 0) {
-        let closestIdx = 0, minDist = Infinity;
-        raw.forEach((c, idx) => {
-            let d = Math.hypot(c.lat - current.lat, (c.lon - current.lon) * Math.cos(current.lat * Math.PI/180));
-            if (d < minDist) { minDist = d; closestIdx = idx; }
-        });
-        current = raw.splice(closestIdx, 1)[0];
-        centers.push(current);
+        // --- 環狀角度排序邏輯 ---
+    // 1. 計算所有點的中心點
+    let avgLat = raw.reduce((sum, p) => sum + p.lat, 0) / raw.length;
+    let avgLon = raw.reduce((sum, p) => sum + p.lon, 0) / raw.length;
+
+    // 2. 計算每個點相對於中心點的角度，並進行排序
+    let centers = raw.map(p => ({
+        ...p,
+        angle: Math.atan2(p.lat - avgLat, p.lon - avgLon)
+    })).sort((a, b) => a.angle - b.angle);
+    // --- 排序結束 ---
+
     }
 
     let allPoints = [];
