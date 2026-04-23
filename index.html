@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX 邏輯生成器 Pro</title>
+    <title>GPX 邏輯生成器 (蛇形掃描版)</title>
     <style>
         :root { --primary: #007aff; --success: #34c759; }
         body { font-family: -apple-system, system-ui; background: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
@@ -24,10 +24,10 @@
 <body>
 
 <div class="card">
-    <h2>📍 GPX 距離與時間計算版</h2>
+    <h2>📍 GPX 蛇形路徑優化版</h2>
     
     <div class="input-group">
-        <label>座標輸入 (格式：緯度,經度)：</label>
+        <label>座標輸入 (緯度,經度)：</label>
         <textarea id="coordsInput" placeholder="貼入座標清單..."></textarea>
     </div>
 
@@ -100,37 +100,51 @@ function handleGenerate(mode) {
 
     if (raw.length === 0) return alert("請輸入有效座標");
 
-    // 權重排序：北 > 東 > 西 > 南
-    let centers = raw.sort((a, b) => {
-        if (b.lat !== a.lat) return b.lat - a.lat;
-        return b.lon - a.lon;
+    // --- 蛇形掃描排序算法 ---
+    // 1. 每 0.0005 緯度分一排 (約 50 公尺，可依需求調整)
+    const rowPrecision = 0.0005; 
+    let rows = {};
+    
+    raw.forEach(p => {
+        let rowId = Math.floor(p.lat / rowPrecision);
+        if (!rows[rowId]) rows[rowId] = [];
+        rows[rowId].push(p);
     });
 
+    // 2. 由北到南排序每一排
+    let sortedRowKeys = Object.keys(rows).sort((a, b) => b - a);
+    let centers = [];
+
+    sortedRowKeys.forEach((key, index) => {
+        let rowPoints = rows[key];
+        if (index % 2 === 0) {
+            // 偶數排：由東向西 (經度大 -> 小)
+            rowPoints.sort((a, b) => b.lon - a.lon);
+        } else {
+            // 奇數排：由西向東 (經度小 -> 大) 反向掃描
+            rowPoints.sort((a, b) => a.lon - b.lon);
+        }
+        centers.push(...rowPoints);
+    });
+
+    // --- 生成點位邏輯 ---
     let allPoints = [];
     centers.forEach((center, i) => {
         let prev = i > 0 ? centers[i-1] : null;
         let next = i < centers.length - 1 ? centers[i+1] : null;
-        
-        // 判斷象限邏輯
         let qP = prev ? getQuadrant(center, prev) : (next ? getQuadrant(center, next) : "NE");
         let qN = next ? getQuadrant(center, next) : qP;
         let path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
 
         path.forEach(step => {
             let fLat, fLon;
-            if (step === "01") { 
-                fLat = center.lat; 
-                fLon = center.lon; 
-            } else {
+            if (step === "01") { fLat = center.lat; fLon = center.lon; }
+            else {
                 let rad = step * Math.PI / 180;
                 fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
                 fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
             }
-            allPoints.push({ 
-                lat: fLat, 
-                lon: fLon, 
-                label: `Z${(i+1).toString().padStart(2,'0')}-${step}` 
-            });
+            allPoints.push({ lat: fLat, lon: fLon, label: `Z${(i+1).toString().padStart(2,'0')}-${step}` });
         });
     });
 
@@ -149,7 +163,7 @@ function handleGenerate(mode) {
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
     // 輸出 GPX
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Weight-Scanner">';
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Snake-Scanner">';
     allPoints.forEach(p => {
         gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
     });
@@ -159,10 +173,10 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `route_weighted_${new Date().getTime()}.gpx`;
+        a.download = `route_snake_${new Date().getTime()}.gpx`;
         a.click();
     } else {
-        navigator.clipboard.writeText(gpx).then(() => alert("排序完成，代碼已複製！"));
+        navigator.clipboard.writeText(gpx).then(() => alert("蛇形排序完成！"));
     }
 }
 </script>
