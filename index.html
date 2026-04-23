@@ -89,23 +89,22 @@ function getQuadrant(curr, target) {
     return "SE";
 }
 
+// 支援 iOS 捷徑 URL 傳遞並自動生成
 window.onload = function() {
     const urlParams = new URLSearchParams(window.location.search);
     const coords = urlParams.get('data');
     if (coords) {
-        // 解碼並填入文字框
         document.getElementById('coordsInput').value = decodeURIComponent(coords);
-        // 如果想要自動執行生成，可以在這裡呼叫 handleGenerate();
+        handleGenerate('copy'); // 自動執行
     }
 }
 
-
 function handleGenerate(mode) {
-    const input = document.getElementById('coordsInput').value;
+    const inputStr = document.getElementById('coordsInput').value;
     const speedKmH = parseFloat(document.getElementById('speedInput').value) || 10;
     
     let raw = [];
-    input.split('\n').forEach(line => {
+    inputStr.split('\n').forEach(line => {
         let p = line.trim().split(/[,|\s]+/);
         if (p.length >= 2) {
             let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
@@ -113,9 +112,16 @@ function handleGenerate(mode) {
         }
     });
 
-    if (raw.length === 0) return alert("請輸入座標");
+    if (raw.length === 0) return alert("請輸入有效座標");
 
-    // TSP 排序
+    // --- 修正：剔除重複座標點 ---
+    raw = raw.filter((point, index, self) =>
+        index === self.findIndex((p) => (
+            p.lat === point.lat && p.lon === point.lon
+        ))
+    );
+
+    // --- TSP 排序 (最近鄰法) ---
     let centers = [];
     let current = raw.shift();
     centers.push(current);
@@ -129,6 +135,7 @@ function handleGenerate(mode) {
         centers.push(current);
     }
 
+    // --- 生成子點位路徑 ---
     let allPoints = [];
     centers.forEach((center, i) => {
         let prev = i > 0 ? centers[i-1] : centers[centers.length - 1];
@@ -138,11 +145,13 @@ function handleGenerate(mode) {
         let path = [];
 
         if (qP === qN) {
+            // 同象限比較邏輯
             if (qP === "NE") path = (prev.lon > next.lon) ? [315, 225, "01", 135, 45] : [45, 135, "01", 225, 315];
             else if (qP === "NW") path = (prev.lon < next.lon) ? [45, 135, "01", 225, 315] : [315, 225, "01", 135, 45];
             else if (qP === "SW") path = (prev.lon < next.lon) ? [135, 45, "01", 315, 225] : [225, 315, "01", 45, 135];
             else if (qP === "SE") path = (prev.lon > next.lon) ? [225, 315, "01", 45, 135] : [135, 45, "01", 315, 225];
         } else {
+            // 不同象限採用 16 條預設規則
             path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
         }
 
@@ -154,11 +163,12 @@ function handleGenerate(mode) {
                 fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
                 fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
             }
-            // 修改點位名稱格式為 P1.1, P1.2...
+            // 點位名稱格式: P1.1, P1.2...
             allPoints.push({ lat: fLat, lon: fLon, label: `P${i+1}.${subIdx+1}` });
         });
     });
 
+    // --- 統計計算 ---
     let totalDist = 0;
     for (let i = 0; i < allPoints.length - 1; i++) {
         totalDist += getDistance(allPoints[i], allPoints[i+1]);
@@ -171,6 +181,7 @@ function handleGenerate(mode) {
     document.getElementById('distRes').innerText = totalDist.toFixed(2) + " 公尺";
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
+    // --- GPX 封裝 ---
     let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-GPX-v1.0">';
     allPoints.forEach(p => {
         gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
