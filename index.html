@@ -89,6 +89,17 @@ function getQuadrant(curr, target) {
     return "SE";
 }
 
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const coords = urlParams.get('data');
+    if (coords) {
+        // 解碼並填入文字框
+        document.getElementById('coordsInput').value = decodeURIComponent(coords);
+        // 如果想要自動執行生成，可以在這裡呼叫 handleGenerate();
+    }
+}
+
+
 function handleGenerate(mode) {
     const input = document.getElementById('coordsInput').value;
     const speedKmH = parseFloat(document.getElementById('speedInput').value) || 10;
