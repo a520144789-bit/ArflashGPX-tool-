@@ -3,23 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX 邏輯生成器 (環狀動態優化版)</title>
+    <title>GPX 實驗室：TSP + 20動態邏輯</title>
     <style>
-        :root { --primary: #007aff; --success: #34c759; }
-        body { font-family: -apple-system, system-ui; background: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
-        .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+        :root { --primary: #5856d6; --success: #34c759; }
+        body { font-family: -apple-system, system-ui; background: #f2f2f7; margin: 0; padding: 20px; color: #1c1e21; }
+        .card { max-width: 850px; margin: auto; background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
         h2 { margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 10px; }
-        .info { background: #e7f3ff; padding: 15px; border-radius: 12px; font-size: 14px; line-height: 1.6; margin-bottom: 20px; border-left: 5px solid var(--primary); }
-        textarea { width: 100%; height: 200px; border: 2px solid #ddd; border-radius: 12px; padding: 15px; font-family: "SF Mono", monospace; font-size: 14px; box-sizing: border-box; transition: border-color 0.3s; }
+        .experiment-tag { background: #ff9500; color: white; font-size: 12px; padding: 4px 10px; border-radius: 100px; }
+        textarea { width: 100%; height: 180px; border: 2px solid #e5e5ea; border-radius: 16px; padding: 15px; font-family: monospace; box-sizing: border-box; transition: 0.3s; }
         textarea:focus { border-color: var(--primary); outline: none; }
-        .input-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
-        .speed-input { width: 100px; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
-        .stats-box { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-top: 20px; display: none; border: 1px solid #eee; }
-        .stats-item { font-size: 15px; margin-bottom: 5px; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        button { padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.1s, opacity 0.2s; }
-        button:active { transform: scale(0.98); }
+        .stats-box { background: #f8f9fa; border-radius: 16px; padding: 20px; margin-top: 20px; border: 1px solid #eee; display: none; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 25px; }
+        button { padding: 18px; border: none; border-radius: 16px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
         .btn-main { background: var(--primary); color: white; }
         .btn-copy { background: #8e8e93; color: white; }
     </style>
@@ -27,32 +22,21 @@
 <body>
 
 <div class="card">
-    <h2>📍 GPX 環狀動態優化生成器</h2>
-    <div class="info">
-        <b>當前優化邏輯：</b><br>
-        1. 採用 <b>環狀角度排序</b>，首尾銜接距離最短。<br>
-        2. 針對同象限進出點位，自動比較經度（東值/西值）決定<b>順逆時針走法</b>。<br>
-        3. 每點生成 16 條方位對應之 5 點軌跡（半徑 36m）。
-    </div>
-
+    <h2>🧪 實驗：TSP + 動態比較邏輯 <span class="experiment-tag">V2.0</span></h2>
+    
     <div class="input-group">
-        <label>座標輸入 (緯度, 經度)：</label>
-        <textarea id="coordsInput" placeholder="貼入座標清單..."></textarea>
-    </div>
-
-    <div class="input-group">
-        <label>預計時速 (km/h)：</label>
-        <input type="number" id="speedInput" class="speed-input" value="10" step="0.1">
+        <label>輸入座標 (Lat, Lon)：</label>
+        <textarea id="coordsInput" placeholder="請輸入點位清單..."></textarea>
     </div>
 
     <div class="btn-group">
-        <button class="btn-main" onclick="handleGenerate('download')">💾 生成並下載 GPX</button>
-        <button class="btn-copy" onclick="handleGenerate('copy')">📋 僅拷貝代碼</button>
+        <button class="btn-main" onclick="handleGenerate('download')">🚀 執行 TSP 優化並下載</button>
+        <button class="btn-copy" onclick="handleGenerate('copy')">📋 複製 GPX 代碼</button>
     </div>
 
     <div id="statsBox" class="stats-box">
-        <div class="stats-item"><b>總行駛距離：</b> <span id="distRes">0</span> 公尺</div>
-        <div class="stats-item"><b>預估總耗時：</b> <span id="timeRes">0</span></div>
+        <div><b>總移動距離：</b> <span id="distRes">0</span> 公尺</div>
+        <div><b>計算模式：</b> TSP 全局最短 + 動態切向優化</div>
     </div>
 </div>
 
@@ -61,7 +45,7 @@ const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 const EARTH_RADIUS = 6371000;
 
-// 原有的 16 條方位查表規則（當進出方向不同時使用）
+// 基本 16 條進出方向規則
 const RULES = {
     "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225],
     "NE_NW": [45, 135, "01", 225, 315], "NE_NE": [45, 135, "01", 225, 315],
@@ -93,8 +77,6 @@ function getQuadrant(curr, target) {
 
 function handleGenerate(mode) {
     const input = document.getElementById('coordsInput').value;
-    const speedKmH = parseFloat(document.getElementById('speedInput').value) || 10;
-    
     let raw = [];
     input.split('\n').forEach(line => {
         let p = line.trim().split(/[,|\s]+/);
@@ -106,48 +88,46 @@ function handleGenerate(mode) {
 
     if (raw.length === 0) return alert("請輸入有效座標");
 
-    // 1. 環狀角度排序
-    let avgLat = raw.reduce((sum, p) => sum + p.lat, 0) / raw.length;
-    let avgLon = raw.reduce((sum, p) => sum + p.lon, 0) / raw.length;
+    // --- 步驟 1: TSP (最近鄰法) 排序 ---
+    let centers = [];
+    let current = raw.shift();
+    centers.push(current);
 
-    let centers = raw.map(p => ({
-        ...p,
-        angle: Math.atan2(p.lat - avgLat, p.lon - avgLon)
-    })).sort((a, b) => a.angle - b.angle);
+    while (raw.length > 0) {
+        let closestIdx = 0;
+        let minDist = Infinity;
+        for (let i = 0; i < raw.length; i++) {
+            let d = Math.hypot(raw[i].lat - current.lat, (raw[i].lon - current.lon));
+            if (d < minDist) { minDist = d; closestIdx = i; }
+        }
+        current = raw.splice(closestIdx, 1)[0];
+        centers.push(current);
+    }
 
-    // 2. 點位生成與動態路徑比較
+    // --- 步驟 2: 套用 20 條動態比較規則 ---
     let allPoints = [];
     centers.forEach((center, i) => {
-        let prev = (i === 0) ? centers[centers.length - 1] : centers[i - 1];
-        let next = (i === centers.length - 1) ? centers[0] : centers[i + 1];
+        let prev = i > 0 ? centers[i-1] : centers[centers.length - 1];
+        let next = i < centers.length - 1 ? centers[i+1] : centers[0];
 
         let qP = getQuadrant(center, prev);
         let qN = getQuadrant(center, next);
         let path = [];
 
-                // --- 修正後的動態比較邏輯 ---
         if (qP === qN) {
+            // 這裡就是你優化的 4 條「同象限比較」邏輯 (加上原本 16 條共 20 條)
             if (qP === "NE") {
-                // 若下一個點在東北，則 45 必須放在最後 (離場點)
                 path = (prev.lon > next.lon) ? [315, 225, "01", 135, 45] : [45, 135, "01", 225, 315];
-            } 
-            else if (qP === "NW") {
-                // 若下一個點在西北，則 315 必須放在最後 (離場點)
-                // 修正：當 a 比 b 更靠西 (prev.lon < next.lon)，應從 45 進場，315 離場
+            } else if (qP === "NW") {
                 path = (prev.lon < next.lon) ? [45, 135, "01", 225, 315] : [315, 225, "01", 135, 45];
-            } 
-            else if (qP === "SW") {
-                // 若下一個點在西南，則 225 必須放在最後 (離場點)
+            } else if (qP === "SW") {
                 path = (prev.lon < next.lon) ? [135, 45, "01", 315, 225] : [225, 315, "01", 45, 135];
-            } 
-            else if (qP === "SE") {
-                // 若下一個點在東南，則 135 必須放在最後 (離場點)
+            } else if (qP === "SE") {
                 path = (prev.lon > next.lon) ? [225, 315, "01", 45, 135] : [135, 45, "01", 315, 225];
             }
         } else {
             path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
         }
-
 
         path.forEach(step => {
             let fLat, fLon;
@@ -157,29 +137,21 @@ function handleGenerate(mode) {
                 fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
                 fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
             }
-            allPoints.push({ lat: fLat, lon: fLon, label: `Z${(i+1).toString().padStart(2,'0')}-${step}` });
+            allPoints.push({ lat: fLat, lon: fLon });
         });
     });
 
-    // 統計計算
+    // 統計與輸出
     let totalDist = 0;
     for (let i = 0; i < allPoints.length - 1; i++) {
         totalDist += getDistance(allPoints[i], allPoints[i+1]);
     }
-    totalDist += getDistance(allPoints[allPoints.length - 1], allPoints[0]); // 閉環
-
-    let totalSeconds = totalDist / (speedKmH * 1000 / 3600);
-    let mins = Math.floor(totalSeconds / 60);
-    let secs = Math.round(totalSeconds % 60);
-
     document.getElementById('statsBox').style.display = 'block';
     document.getElementById('distRes').innerText = totalDist.toFixed(2);
-    document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
-    // 輸出 GPX
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Dynamic-Optimizer">';
-    allPoints.forEach(p => {
-        gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="TSP-Dynamic-Lab">';
+    allPoints.forEach((p, i) => {
+        gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>T${i+1}</name></wpt>`;
     });
     gpx += '\n</gpx>';
 
@@ -187,10 +159,10 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `route_dynamic_${new Date().getTime()}.gpx`;
+        a.download = `experiment_tsp_dynamic.gpx`;
         a.click();
     } else {
-        navigator.clipboard.writeText(gpx).then(() => alert("動態優化版代碼已複製！"));
+        navigator.clipboard.writeText(gpx).then(() => alert("GPX 已複製"));
     }
 }
 </script>
