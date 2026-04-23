@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX 邏輯生成器 (蛇形掃描版)</title>
+    <title>GPX 邏輯生成器 (TSP 最短路徑版)</title>
     <style>
         :root { --primary: #007aff; --success: #34c759; }
         body { font-family: -apple-system, system-ui; background: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
@@ -24,7 +24,7 @@
 <body>
 
 <div class="card">
-    <h2>📍 GPX 蛇形路徑優化版</h2>
+    <h2>📍 GPX TSP 最短距離版</h2>
     
     <div class="input-group">
         <label>座標輸入 (緯度,經度)：</label>
@@ -100,34 +100,28 @@ function handleGenerate(mode) {
 
     if (raw.length === 0) return alert("請輸入有效座標");
 
-    // --- 蛇形掃描排序算法 ---
-    // 1. 每 0.0005 緯度分一排 (約 50 公尺，可依需求調整)
-    const rowPrecision = 0.0005; 
-    let rows = {};
-    
-    raw.forEach(p => {
-        let rowId = Math.floor(p.lat / rowPrecision);
-        if (!rows[rowId]) rows[rowId] = [];
-        rows[rowId].push(p);
-    });
-
-    // 2. 由北到南排序每一排
-    let sortedRowKeys = Object.keys(rows).sort((a, b) => b - a);
+    // --- TSP (最近鄰) 演算法 ---
     let centers = [];
+    let current = raw.shift();
+    centers.push(current);
 
-    sortedRowKeys.forEach((key, index) => {
-        let rowPoints = rows[key];
-        if (index % 2 === 0) {
-            // 偶數排：由東向西 (經度大 -> 小)
-            rowPoints.sort((a, b) => b.lon - a.lon);
-        } else {
-            // 奇數排：由西向東 (經度小 -> 大) 反向掃描
-            rowPoints.sort((a, b) => a.lon - b.lon);
+    while (raw.length > 0) {
+        let closestIdx = 0;
+        let minDist = Infinity;
+        
+        for (let i = 0; i < raw.length; i++) {
+            // 使用簡化後的歐幾里得距離進行快速排序
+            let d = Math.hypot(raw[i].lat - current.lat, (raw[i].lon - current.lon) * Math.cos(current.lat * Math.PI/180));
+            if (d < minDist) {
+                minDist = d;
+                closestIdx = i;
+            }
         }
-        centers.push(...rowPoints);
-    });
+        current = raw.splice(closestIdx, 1)[0];
+        centers.push(current);
+    }
 
-    // --- 生成點位邏輯 ---
+    // --- 生成點位 ---
     let allPoints = [];
     centers.forEach((center, i) => {
         let prev = i > 0 ? centers[i-1] : null;
@@ -163,7 +157,7 @@ function handleGenerate(mode) {
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
     // 輸出 GPX
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Snake-Scanner">';
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-TSP-Optimized">';
     allPoints.forEach(p => {
         gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
     });
@@ -173,10 +167,10 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `route_snake_${new Date().getTime()}.gpx`;
+        a.download = `route_tsp_${new Date().getTime()}.gpx`;
         a.click();
     } else {
-        navigator.clipboard.writeText(gpx).then(() => alert("蛇形排序完成！"));
+        navigator.clipboard.writeText(gpx).then(() => alert("TSP 排序完成！"));
     }
 }
 </script>
