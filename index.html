@@ -3,20 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX 邏輯生成器 (環狀優化版)</title>
+    <title>GPX 邏輯生成器 (環狀動態優化版)</title>
     <style>
         :root { --primary: #007aff; --success: #34c759; }
         body { font-family: -apple-system, system-ui; background: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
         .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
-        h2 { margin-top: 0; color: var(--primary); }
+        h2 { margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .info { background: #e7f3ff; padding: 15px; border-radius: 12px; font-size: 14px; line-height: 1.6; margin-bottom: 20px; border-left: 5px solid var(--primary); }
+        textarea { width: 100%; height: 200px; border: 2px solid #ddd; border-radius: 12px; padding: 15px; font-family: "SF Mono", monospace; font-size: 14px; box-sizing: border-box; transition: border-color 0.3s; }
+        textarea:focus { border-color: var(--primary); outline: none; }
         .input-group { margin-bottom: 20px; }
         label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
-        textarea { width: 100%; height: 180px; border: 2px solid #ddd; border-radius: 12px; padding: 15px; font-family: monospace; box-sizing: border-box; }
         .speed-input { width: 100px; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
         .stats-box { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-top: 20px; display: none; border: 1px solid #eee; }
         .stats-item { font-size: 15px; margin-bottom: 5px; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        button { padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button { padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.1s, opacity 0.2s; }
+        button:active { transform: scale(0.98); }
         .btn-main { background: var(--primary); color: white; }
         .btn-copy { background: #8e8e93; color: white; }
     </style>
@@ -24,10 +27,16 @@
 <body>
 
 <div class="card">
-    <h2>📍 GPX 環狀路徑優化版</h2>
-    
+    <h2>📍 GPX 環狀動態優化生成器</h2>
+    <div class="info">
+        <b>當前優化邏輯：</b><br>
+        1. 採用 <b>環狀角度排序</b>，首尾銜接距離最短。<br>
+        2. 針對同象限進出點位，自動比較經度（東值/西值）決定<b>順逆時針走法</b>。<br>
+        3. 每點生成 16 條方位對應之 5 點軌跡（半徑 36m）。
+    </div>
+
     <div class="input-group">
-        <label>座標輸入：</label>
+        <label>座標輸入 (緯度, 經度)：</label>
         <textarea id="coordsInput" placeholder="貼入座標清單..."></textarea>
     </div>
 
@@ -52,6 +61,7 @@ const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 const EARTH_RADIUS = 6371000;
 
+// 原有的 16 條方位查表規則（當進出方向不同時使用）
 const RULES = {
     "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225],
     "NE_NW": [45, 135, "01", 225, 315], "NE_NE": [45, 135, "01", 225, 315],
@@ -96,7 +106,7 @@ function handleGenerate(mode) {
 
     if (raw.length === 0) return alert("請輸入有效座標");
 
-    // --- 環狀角度排序邏輯 ---
+    // 1. 環狀角度排序
     let avgLat = raw.reduce((sum, p) => sum + p.lat, 0) / raw.length;
     let avgLon = raw.reduce((sum, p) => sum + p.lon, 0) / raw.length;
 
@@ -104,20 +114,37 @@ function handleGenerate(mode) {
         ...p,
         angle: Math.atan2(p.lat - avgLat, p.lon - avgLon)
     })).sort((a, b) => a.angle - b.angle);
-    // --- 排序結束 ---
 
+    // 2. 點位生成與動態路徑比較
     let allPoints = [];
     centers.forEach((center, i) => {
-        let prev = i > 0 ? centers[i-1] : null;
-        let next = i < centers.length - 1 ? centers[i+1] : null;
-        
-        // 為了讓首尾銜接，第一個點的 prev 設為最後一個點，最後一個點的 next 設為第一個點
-        if (i === 0) prev = centers[centers.length - 1];
-        if (i === centers.length - 1) next = centers[0];
+        let prev = (i === 0) ? centers[centers.length - 1] : centers[i - 1];
+        let next = (i === centers.length - 1) ? centers[0] : centers[i + 1];
 
         let qP = getQuadrant(center, prev);
         let qN = getQuadrant(center, next);
-        let path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
+        let path = [];
+
+        // --- 動態比較邏輯開始 ---
+        if (qP === qN) {
+            if (qP === "NE") {
+                // 東值較大則順走，否則逆走
+                path = (prev.lon > next.lon) ? [315, 225, "01", 135, 45] : [45, 135, "01", 225, 315];
+            } 
+            else if (qP === "NW") {
+                // 西值(負值)較大則逆走，否則順走
+                path = (prev.lon < next.lon) ? [45, 135, "01", 225, 315] : [315, 225, "01", 135, 45];
+            } 
+            else if (qP === "SW") {
+                path = (prev.lon < next.lon) ? [135, 45, "01", 315, 225] : [225, 315, "01", 45, 135];
+            } 
+            else if (qP === "SE") {
+                path = (prev.lon > next.lon) ? [135, 45, "01", 315, 225] : [225, 315, "01", 45, 135];
+            }
+        } else {
+            path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
+        }
+        // --- 動態比較邏輯結束 ---
 
         path.forEach(step => {
             let fLat, fLon;
@@ -131,13 +158,12 @@ function handleGenerate(mode) {
         });
     });
 
-    // 計算總距離
+    // 統計計算
     let totalDist = 0;
     for (let i = 0; i < allPoints.length - 1; i++) {
         totalDist += getDistance(allPoints[i], allPoints[i+1]);
     }
-    // 加入最後一個點回到第一個點的距離（閉環統計）
-    totalDist += getDistance(allPoints[allPoints.length - 1], allPoints[0]);
+    totalDist += getDistance(allPoints[allPoints.length - 1], allPoints[0]); // 閉環
 
     let totalSeconds = totalDist / (speedKmH * 1000 / 3600);
     let mins = Math.floor(totalSeconds / 60);
@@ -147,7 +173,8 @@ function handleGenerate(mode) {
     document.getElementById('distRes').innerText = totalDist.toFixed(2);
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Circle-Optimizer">';
+    // 輸出 GPX
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Dynamic-Optimizer">';
     allPoints.forEach(p => {
         gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
     });
@@ -157,10 +184,10 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `route_circle_${new Date().getTime()}.gpx`;
+        a.download = `route_dynamic_${new Date().getTime()}.gpx`;
         a.click();
     } else {
-        navigator.clipboard.writeText(gpx).then(() => alert("環狀排序代碼已複製！"));
+        navigator.clipboard.writeText(gpx).then(() => alert("動態優化版代碼已複製！"));
     }
 }
 </script>
