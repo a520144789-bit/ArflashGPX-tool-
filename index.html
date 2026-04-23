@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX 邏輯生成器 Pro</title>
+    <title>GPX 邏輯生成器 (環狀優化版)</title>
     <style>
         :root { --primary: #007aff; --success: #34c759; }
         body { font-family: -apple-system, system-ui; background: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
@@ -24,7 +24,7 @@
 <body>
 
 <div class="card">
-    <h2>📍 GPX 距離與時間計算版</h2>
+    <h2>📍 GPX 環狀路徑優化版</h2>
     
     <div class="input-group">
         <label>座標輸入：</label>
@@ -50,7 +50,7 @@
 <script>
 const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
-const EARTH_RADIUS = 6371000; // 公尺
+const EARTH_RADIUS = 6371000;
 
 const RULES = {
     "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225],
@@ -72,13 +72,22 @@ function getDistance(p1, p2) {
     return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * EARTH_RADIUS;
 }
 
+function getQuadrant(curr, target) {
+    let dLat = target.lat - curr.lat;
+    let dLon = target.lon - curr.lon;
+    if (dLat >= 0 && dLon >= 0) return "NE";
+    if (dLat >= 0 && dLon < 0)  return "NW";
+    if (dLat < 0 && dLon < 0)   return "SW";
+    return "SE";
+}
+
 function handleGenerate(mode) {
     const input = document.getElementById('coordsInput').value;
     const speedKmH = parseFloat(document.getElementById('speedInput').value) || 10;
     
     let raw = [];
     input.split('\n').forEach(line => {
-        let p = line.split(/[,|\s]+/);
+        let p = line.trim().split(/[,|\s]+/);
         if (p.length >= 2) {
             let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
             if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon});
@@ -87,26 +96,27 @@ function handleGenerate(mode) {
 
     if (raw.length === 0) return alert("請輸入有效座標");
 
-        // --- 環狀角度排序邏輯 ---
-    // 1. 計算所有點的中心點
+    // --- 環狀角度排序邏輯 ---
     let avgLat = raw.reduce((sum, p) => sum + p.lat, 0) / raw.length;
     let avgLon = raw.reduce((sum, p) => sum + p.lon, 0) / raw.length;
 
-    // 2. 計算每個點相對於中心點的角度，並進行排序
     let centers = raw.map(p => ({
         ...p,
         angle: Math.atan2(p.lat - avgLat, p.lon - avgLon)
     })).sort((a, b) => a.angle - b.angle);
     // --- 排序結束 ---
 
-    }
-
     let allPoints = [];
     centers.forEach((center, i) => {
         let prev = i > 0 ? centers[i-1] : null;
         let next = i < centers.length - 1 ? centers[i+1] : null;
-        let qP = prev ? getQuadrant(center, prev) : (next ? getQuadrant(center, next) : "NE");
-        let qN = next ? getQuadrant(center, next) : qP;
+        
+        // 為了讓首尾銜接，第一個點的 prev 設為最後一個點，最後一個點的 next 設為第一個點
+        if (i === 0) prev = centers[centers.length - 1];
+        if (i === centers.length - 1) next = centers[0];
+
+        let qP = getQuadrant(center, prev);
+        let qN = getQuadrant(center, next);
         let path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
 
         path.forEach(step => {
@@ -126,19 +136,18 @@ function handleGenerate(mode) {
     for (let i = 0; i < allPoints.length - 1; i++) {
         totalDist += getDistance(allPoints[i], allPoints[i+1]);
     }
+    // 加入最後一個點回到第一個點的距離（閉環統計）
+    totalDist += getDistance(allPoints[allPoints.length - 1], allPoints[0]);
 
-    // 計算時間
     let totalSeconds = totalDist / (speedKmH * 1000 / 3600);
     let mins = Math.floor(totalSeconds / 60);
     let secs = Math.round(totalSeconds % 60);
 
-    // 顯示結果
     document.getElementById('statsBox').style.display = 'block';
     document.getElementById('distRes').innerText = totalDist.toFixed(2);
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
-    // 生成 GPX
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1">';
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GPX-Circle-Optimizer">';
     allPoints.forEach(p => {
         gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
     });
@@ -148,20 +157,11 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `route_${new Date().getTime()}.gpx`;
+        a.download = `route_circle_${new Date().getTime()}.gpx`;
         a.click();
     } else {
-        navigator.clipboard.writeText(gpx).then(() => alert("代碼已複製！"));
+        navigator.clipboard.writeText(gpx).then(() => alert("環狀排序代碼已複製！"));
     }
-}
-
-function getQuadrant(curr, target) {
-    let dLat = target.lat - curr.lat;
-    let dLon = target.lon - curr.lon;
-    if (dLat >= 0 && dLon >= 0) return "NE";
-    if (dLat >= 0 && dLon < 0)  return "NW";
-    if (dLat < 0 && dLon < 0)   return "SW";
-    return "SE";
 }
 </script>
 </body>
