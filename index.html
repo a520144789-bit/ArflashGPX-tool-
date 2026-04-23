@@ -3,50 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX 實驗室：TSP + 20動態邏輯</title>
+    <title>Suderpanda GPX 座標生產器 v1.0</title>
     <style>
-        :root { --primary: #5856d6; --success: #34c759; }
-        body { font-family: -apple-system, system-ui; background: #f2f2f7; margin: 0; padding: 20px; color: #1c1e21; }
-        .card { max-width: 850px; margin: auto; background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
-        h2 { margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 10px; }
-        .experiment-tag { background: #ff9500; color: white; font-size: 12px; padding: 4px 10px; border-radius: 100px; }
-        textarea { width: 100%; height: 180px; border: 2px solid #e5e5ea; border-radius: 16px; padding: 15px; font-family: monospace; box-sizing: border-box; transition: 0.3s; }
-        textarea:focus { border-color: var(--primary); outline: none; }
-        .input-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
-        .speed-input { width: 100px; padding: 10px; border: 2px solid #e5e5ea; border-radius: 8px; font-size: 16px; }
-        .stats-box { background: #f8f9fa; border-radius: 16px; padding: 20px; margin-top: 20px; border: 1px solid #eee; display: none; }
-        .stats-item { font-size: 15px; margin-bottom: 5px; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 25px; }
-        button { padding: 18px; border: none; border-radius: 16px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .btn-main { background: var(--primary); color: white; }
-        .btn-copy { background: #8e8e93; color: white; }
+        :root { --primary: #ff4757; --secondary: #2f3542; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f1f2f6; margin: 0; padding: 20px; color: #2f3542; }
+        .card { max-width: 800px; margin: auto; background: white; padding: 35px; border-radius: 28px; box-shadow: 0 15px 50px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; color: var(--primary); font-size: 24px; text-align: center; border-bottom: 2px solid #f1f2f6; padding-bottom: 20px; }
+        .badge { background: var(--primary); color: white; font-size: 12px; padding: 4px 12px; border-radius: 50px; vertical-align: middle; margin-left: 10px; }
+        .input-group { margin-top: 25px; }
+        label { display: block; font-weight: 700; margin-bottom: 10px; font-size: 15px; color: #57606f; }
+        textarea { width: 100%; height: 200px; border: 2px solid #dfe4ea; border-radius: 16px; padding: 15px; font-family: "SF Mono", "Courier New", monospace; font-size: 14px; box-sizing: border-box; transition: 0.3s; resize: vertical; }
+        textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(255, 71, 87, 0.1); }
+        .config-row { display: flex; gap: 20px; margin-top: 20px; }
+        .speed-input { width: 120px; padding: 12px; border: 2px solid #dfe4ea; border-radius: 12px; font-size: 16px; text-align: center; }
+        .stats-box { background: #f9f9fb; border-radius: 18px; padding: 20px; margin-top: 25px; border: 1px solid #e1e1e1; display: none; }
+        .stats-item { font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 30px; }
+        button { padding: 18px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        button:active { transform: scale(0.97); }
+        .btn-main { background: var(--primary); color: white; box-shadow: 0 8px 20px rgba(255, 71, 87, 0.3); }
+        .btn-main:hover { opacity: 0.9; box-shadow: 0 4px 10px rgba(255, 71, 87, 0.3); }
+        .btn-copy { background: #747d8c; color: white; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>🧪 實驗：TSP + 動態比較邏輯 <span class="experiment-tag">修正版</span></h2>
+    <h1>🐼 Suderpanda GPX 座標生產器 <span class="badge">v1.0</span></h1>
     
     <div class="input-group">
-        <label>輸入座標 (Lat, Lon)：</label>
-        <textarea id="coordsInput" placeholder="請輸入點位清單..."></textarea>
+        <label>座標輸入 (每行一個 緯度,經度)：</label>
+        <textarea id="coordsInput" placeholder="24.123456, 120.654321&#10;24.123789, 120.654987..."></textarea>
     </div>
 
-    <div class="input-group">
-        <label>預計時速 (km/h)：</label>
-        <input type="number" id="speedInput" class="speed-input" value="10" step="0.1">
+    <div class="config-row">
+        <div>
+            <label>預計時速 (km/h)：</label>
+            <input type="number" id="speedInput" class="speed-input" value="10" step="0.1">
+        </div>
     </div>
 
     <div class="btn-group">
-        <button class="btn-main" onclick="handleGenerate('download')">🚀 執行 TSP 並下載</button>
-        <button class="btn-copy" onclick="handleGenerate('copy')">📋 複製 GPX</button>
+        <button class="btn-main" onclick="handleGenerate('download')">💾 生成並下載 GPX</button>
+        <button class="btn-copy" onclick="handleGenerate('copy')">📋 複製 GPX 代碼</button>
     </div>
 
     <div id="statsBox" class="stats-box">
-        <div class="stats-item"><b>總移動距離：</b> <span id="distRes">0</span> 公尺</div>
-        <div class="stats-item"><b>預估總耗時：</b> <span id="timeRes">0</span></div>
-        <div class="stats-item" style="color: #666; font-size: 12px; margin-top: 5px;">(計算模式：TSP 全局最短 + 局部動態切向優化)</div>
+        <div class="stats-item"><span>📏 總行駛距離：</span><b id="distRes">0</b></div>
+        <div class="stats-item"><span>⏱️ 預估總耗時：</span><b id="timeRes">0</b></div>
+        <div style="font-size: 12px; color: #a4b0be; margin-top: 10px; text-align: center;">優化模式：TSP 全局最短路徑 + 動態方位銜接邏輯</div>
     </div>
 </div>
 
@@ -87,7 +92,7 @@ function getQuadrant(curr, target) {
 function handleGenerate(mode) {
     const input = document.getElementById('coordsInput').value;
     const speedKmH = parseFloat(document.getElementById('speedInput').value) || 10;
-
+    
     let raw = [];
     input.split('\n').forEach(line => {
         let p = line.trim().split(/[,|\s]+/);
@@ -97,24 +102,22 @@ function handleGenerate(mode) {
         }
     });
 
-    if (raw.length === 0) return alert("請輸入有效座標");
+    if (raw.length === 0) return alert("請輸入座標");
 
-    // 1. TSP 排序
+    // TSP 排序
     let centers = [];
     let current = raw.shift();
     centers.push(current);
     while (raw.length > 0) {
-        let closestIdx = 0;
-        let minDist = Infinity;
+        let closestIdx = 0, minDist = Infinity;
         for (let i = 0; i < raw.length; i++) {
-            let d = Math.hypot(raw[i].lat - current.lat, (raw[i].lon - current.lon));
+            let d = Math.hypot(raw[i].lat - current.lat, raw[i].lon - current.lon);
             if (d < minDist) { minDist = d; closestIdx = i; }
         }
         current = raw.splice(closestIdx, 1)[0];
         centers.push(current);
     }
 
-    // 2. 生成點位
     let allPoints = [];
     centers.forEach((center, i) => {
         let prev = i > 0 ? centers[i-1] : centers[centers.length - 1];
@@ -132,7 +135,7 @@ function handleGenerate(mode) {
             path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
         }
 
-        path.forEach(step => {
+        path.forEach((step, subIdx) => {
             let fLat, fLon;
             if (step === "01") { fLat = center.lat; fLon = center.lon; }
             else {
@@ -140,28 +143,26 @@ function handleGenerate(mode) {
                 fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
                 fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
             }
-            allPoints.push({ lat: fLat, lon: fLon });
+            // 修改點位名稱格式為 P1.1, P1.2...
+            allPoints.push({ lat: fLat, lon: fLon, label: `P${i+1}.${subIdx+1}` });
         });
     });
 
-    // 3. 統計時間與距離 (修正處)
     let totalDist = 0;
     for (let i = 0; i < allPoints.length - 1; i++) {
         totalDist += getDistance(allPoints[i], allPoints[i+1]);
     }
-    
     let totalSeconds = totalDist / (speedKmH * 1000 / 3600);
     let mins = Math.floor(totalSeconds / 60);
     let secs = Math.round(totalSeconds % 60);
 
     document.getElementById('statsBox').style.display = 'block';
-    document.getElementById('distRes').innerText = totalDist.toFixed(2);
+    document.getElementById('distRes').innerText = totalDist.toFixed(2) + " 公尺";
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
 
-    // 4. 輸出 GPX
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="TSP-Dynamic-Optimizer">';
-    allPoints.forEach((p, i) => {
-        gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>T${i+1}</name></wpt>`;
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-GPX-v1.0">';
+    allPoints.forEach(p => {
+        gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
     });
     gpx += '\n</gpx>';
 
@@ -169,10 +170,10 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `route_tsp_v2.gpx`;
+        a.download = `Suderpanda_Route_${new Date().getTime()}.gpx`;
         a.click();
     } else {
-        navigator.clipboard.writeText(gpx).then(() => alert("GPX 已複製到剪貼簿"));
+        navigator.clipboard.writeText(gpx).then(() => alert("GPX 代碼已複製！"));
     }
 }
 </script>
