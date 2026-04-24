@@ -2,70 +2,66 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suderpanda GPX v2.5</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Suderpanda GPX v2.6</title>
     <style>
         :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); padding: 20px; color: #2d3436; }
-        .card { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: var(--primary); font-size: 22px; margin-bottom: 15px; }
-        textarea { width: 100%; height: 100px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px; box-sizing: border-box; font-size: 13px; margin-bottom: 15px; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); padding: 15px; color: #2d3436; margin: 0; }
+        .card { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: var(--primary); font-size: 20px; margin-bottom: 15px; }
+        textarea { width: 100%; height: 80px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 10px; box-sizing: border-box; font-size: 13px; margin-bottom: 10px; }
         
-        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 20px; height: 380px; overflow: hidden; border: 2px solid #dcdde1; }
+        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 15px; height: 350px; overflow: hidden; border: 1px solid #dcdde1; }
         canvas { width: 100%; height: 100%; display: block; }
-        .legend { position: absolute; top: 10px; left: 10px; color: #dcdde1; font-size: 11px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px; pointer-events: none; line-height: 1.5; z-index: 10; }
-
-        .btn-group { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        button { padding: 14px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        .btn-analyze { background: var(--success); color: white; }
-        .btn-copy { background: #0984e3; color: white; }
-        .btn-download { background: var(--primary); color: white; }
-        button:hover { opacity: 0.9; transform: translateY(-1px); }
-        button:active { transform: translateY(0); }
-
-        #sortableList { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-        .sort-item { background: #fff; border: 1px solid #eee; padding: 10px; border-radius: 10px; cursor: grab; display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
-        .sort-item:active { cursor: grabbing; border-color: var(--primary); background: #f1f2f6; }
-        .sort-item .idx { background: var(--primary); color: white; width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; margin-right: 10px; }
         
-        /* 複製成功提示 */
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #2d3436; color: white; padding: 10px 25px; border-radius: 50px; font-size: 14px; opacity: 0; transition: 0.3s; z-index: 100; pointer-events: none; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; }
+        button { padding: 12px 5px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; color: white; }
+        .btn-analyze { background: var(--success); }
+        .btn-copy { background: #0984e3; }
+        .btn-download { background: var(--primary); }
+
+        /* 排序清單優化 */
+        #sortableList { list-style: none; padding: 0; margin: 0; }
+        .sort-item { 
+            background: #fff; border: 1px solid #eee; padding: 12px; border-radius: 10px; 
+            margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; 
+            font-size: 14px; touch-action: none; /* 重要：防止瀏覽器預設滾動 */
+            user-select: none;
+        }
+        .sort-item.dragging { background: #e0e0ff; border: 2px dashed var(--primary); opacity: 0.8; }
+        .sort-item .idx { background: var(--primary); color: white; width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; margin-right: 10px; }
+        
+        #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 8px 20px; border-radius: 20px; font-size: 13px; opacity: 0; transition: 0.3s; z-index: 1000; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX v2.5 (快速複製版)</h1>
-    
-    <textarea id="coordsInput" placeholder="貼上原始座標 (緯度, 經度)..."></textarea>
+    <h1>🐼 GPX v2.6 (手機拖曳優化版)</h1>
+    <textarea id="coordsInput" placeholder="貼上座標..."></textarea>
 
     <div class="btn-group">
-        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析預覽</button>
-        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製 GPX</button>
-        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
+        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析</button>
+        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製</button>
+        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載</button>
     </div>
 
     <div class="map-container">
-        <div class="legend">
-            🟢 起點 | 🔴 終點 | 數字：大點順序<br>
-            黃虛線：目前行進路徑預覽
-        </div>
         <canvas id="mapCanvas"></canvas>
     </div>
 
-    <div style="font-size: 13px; color: #636e72; margin-bottom: 10px;">💡 <b>拖拽編號</b>可重新排序，路徑圖會同步更新：</div>
+    <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">👇 <b>長按並上下拖動</b> 數字塊可調整順序：</div>
     <ul id="sortableList"></ul>
 </div>
 
-<div id="toast">✅ GPX 已複製到剪貼簿</div>
+<div id="toast"></div>
 
 <script>
 let masterCenters = [];
-let dragIdx = null;
 const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 
-// 第一步：分析與渲染
+// --- 解析與核心邏輯 (同前版) ---
 function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value;
     let raw = [];
@@ -76,11 +72,9 @@ function analyzePoints() {
             if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon});
         }
     });
-
-    if (raw.length === 0) return alert("請輸入座標內容");
+    if (raw.length === 0) return;
     raw = raw.filter((p, i, self) => i === self.findIndex(t => t.lat === p.lat && t.lon === p.lon));
 
-    // 初始四象限算法
     let minLat = Math.min(...raw.map(p => p.lat)), maxLat = Math.max(...raw.map(p => p.lat));
     let minLon = Math.min(...raw.map(p => p.lon)), maxLon = Math.max(...raw.map(p => p.lon));
     let cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
@@ -94,97 +88,9 @@ function analyzePoints() {
     });
 
     masterCenters = [];
-    masterCenters.push(...runTSP(q[0], 0));
-    masterCenters.push(...runTSP(q[1], 0));
-    masterCenters.push(...runTSP(q[2], 0));
-    masterCenters.push(...runTSP(q[3], 0));
-
+    [0,1,2,3].forEach(i => { masterCenters.push(...runTSP(q[i], 0)); });
     renderAll();
-    showToast("🔍 分析完成，路徑已生成");
-}
-
-function renderAll() {
-    renderSortableList();
-    drawMap();
-}
-
-// 視覺化畫布
-function drawMap() {
-    const canvas = document.getElementById('mapCanvas');
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    
-    if (masterCenters.length === 0) return;
-
-    const lats = masterCenters.map(p => p.lat);
-    const lons = masterCenters.map(p => p.lon);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
-    
-    const padding = 50;
-    const w = rect.width - padding * 2;
-    const h = rect.height - padding * 2;
-
-    const getX = (lon) => padding + (maxLon === minLon ? w/2 : (lon - minLon) / (maxLon - minLon) * w);
-    const getY = (lat) => padding + (maxLat === minLat ? h/2 : (maxLat - lat) / (maxLat - minLat) * h);
-
-    ctx.clearRect(0, 0, rect.width, rect.height);
-
-    // 畫路徑線
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(241, 196, 15, 0.7)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    masterCenters.forEach((p, i) => {
-        const x = getX(p.lon), y = getY(p.lat);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 畫大點與標號
-    masterCenters.forEach((p, i) => {
-        const x = getX(p.lon), y = getY(p.lat);
-        ctx.fillStyle = (i === 0) ? "#2ecc71" : (i === masterCenters.length - 1 ? "#e74c3c" : "#6c5ce7");
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.fillStyle = "white";
-        ctx.font = "bold 12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.shadowColor = "black";
-        ctx.shadowBlur = 4;
-        ctx.fillText(i + 1, x, y - 10);
-        ctx.shadowBlur = 0;
-    });
-}
-
-// 渲染清單
-function renderSortableList() {
-    const list = document.getElementById('sortableList');
-    list.innerHTML = "";
-    masterCenters.forEach((p, i) => {
-        const li = document.createElement('li');
-        li.className = 'sort-item';
-        li.draggable = true;
-        li.innerHTML = `<div><span class="idx">${i+1}</span>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div><span>⠿</span>`;
-        li.addEventListener('dragstart', () => { dragIdx = i; });
-        li.addEventListener('dragover', (e) => e.preventDefault());
-        li.addEventListener('drop', () => {
-            const [item] = masterCenters.splice(dragIdx, 1);
-            masterCenters.splice(i, 0, item);
-            renderAll();
-        });
-        list.appendChild(li);
-    });
+    showToast("🔍 分析完成");
 }
 
 function runTSP(points, startIdx) {
@@ -203,17 +109,104 @@ function runTSP(points, startIdx) {
     return ordered;
 }
 
-// 生成 GPX 字串 (包含 20 條邏輯)
-function buildGPXString() {
-    const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
-    const getQ = (c, t) => { let dLat = t.lat-c.lat, dLon = t.lon-c.lon; if(dLat>=0 && dLon>=0) return "NE"; if(dLat>=0 && dLon<0) return "NW"; if(dLat<0 && dLon<0) return "SW"; return "SE"; };
+// --- 手機觸控拖拽實作 ---
+let dragEl = null;
 
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-V25">';
+function renderSortableList() {
+    const list = document.getElementById('sortableList');
+    list.innerHTML = "";
+    masterCenters.forEach((p, i) => {
+        const li = document.createElement('li');
+        li.className = 'sort-item';
+        li.dataset.index = i;
+        li.innerHTML = `<div><span class="idx">${i+1}</span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div><span>⠿</span>`;
+        
+        // 觸控事件
+        li.addEventListener('touchstart', handleTouchStart, {passive: false});
+        li.addEventListener('touchmove', handleTouchMove, {passive: false});
+        li.addEventListener('touchend', handleTouchEnd);
+        
+        list.appendChild(li);
+    });
+}
+
+function handleTouchStart(e) {
+    dragEl = e.currentTarget;
+    dragEl.classList.add('dragging');
+}
+
+function handleTouchMove(e) {
+    e.preventDefault(); // 鎖定螢幕滾動
+    const touch = e.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const container = document.getElementById('sortableList');
+    const closestItem = target ? target.closest('.sort-item') : null;
+
+    if (closestItem && closestItem !== dragEl) {
+        const rect = closestItem.getBoundingClientRect();
+        const next = (touch.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+        container.insertBefore(dragEl, next ? closestItem.nextSibling : closestItem);
+    }
+}
+
+function handleTouchEnd() {
+    if (!dragEl) return;
+    dragEl.classList.remove('dragging');
+    
+    // 重新抓取 DOM 順序更新數據
+    const newList = Array.from(document.querySelectorAll('.sort-item'));
+    const newMaster = newList.map(li => masterCenters[parseInt(li.dataset.index)]);
+    masterCenters = newMaster;
+    
+    dragEl = null;
+    renderAll(); // 重新編號與畫圖
+}
+
+// --- 繪圖與導出 (同前版) ---
+function renderAll() {
+    renderSortableList();
+    drawMap();
+}
+
+function drawMap() {
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    if (masterCenters.length === 0) return;
+    const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+    const pad = 40;
+    const getX = (lon) => pad + (maxLon === minLon ? (rect.width-pad*2)/2 : (lon - minLon) / (maxLon - minLon) * (rect.width - pad * 2));
+    const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
+
+    ctx.clearRect(0,0,rect.width, rect.height);
+    ctx.beginPath(); ctx.strokeStyle = "rgba(241,196,15,0.7)"; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke(); ctx.setLineDash([]);
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        ctx.fillStyle = (i === 0) ? "#2ecc71" : (i === masterCenters.length-1 ? "#e74c3c" : "#6c5ce7");
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "white"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(i + 1, x, y - 8);
+    });
+}
+
+function buildGPX() {
+    const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
+    const getQ = (c, t) => { let dLat = t.lat-c.lat, dLon = t.lon-c.lon; return (dLat>=0 && dLon>=0)?"NE":(dLat>=0 && dLon<0)?"NW":(dLat<0 && dLon<0)?"SW":"SE"; };
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1">';
     masterCenters.forEach((center, i) => {
         let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length-1];
         let next = i < masterCenters.length-1 ? masterCenters[i+1] : masterCenters[0];
         let path = RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315];
-        
         path.forEach((step, sub) => {
             let lat = center.lat, lon = center.lon;
             if (step !== "01") {
@@ -227,41 +220,22 @@ function buildGPXString() {
     return gpx + '\n</gpx>';
 }
 
-// 執行複製
 async function copyFinalGPX() {
-    if (masterCenters.length === 0) return alert("請先進行分析");
-    const gpx = buildGPXString();
-    try {
-        await navigator.clipboard.writeText(gpx);
-        showToast("📋 GPX 已複製到剪貼簿");
-    } catch (err) {
-        // 備用複製法
-        const el = document.createElement('textarea');
-        el.value = gpx;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-        showToast("📋 GPX 已複製 (備用模式)");
-    }
+    if (masterCenters.length === 0) return;
+    try { await navigator.clipboard.writeText(buildGPX()); showToast("📋 已複製 GPX"); }
+    catch (e) { showToast("❌ 複製失敗"); }
 }
 
-// 執行下載
 function downloadFinalGPX() {
-    if (masterCenters.length === 0) return alert("請先進行分析");
-    const gpx = buildGPXString();
-    const blob = new Blob([gpx], {type: 'application/gpx+xml'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_V25_${new Date().getTime()}.gpx`;
-    a.click();
+    if (masterCenters.length === 0) return;
+    const blob = new Blob([buildGPX()], {type: 'application/gpx+xml'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Suderpanda_${Date.now()}.gpx`; a.click();
 }
 
 function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.innerText = msg;
-    t.style.opacity = "1";
-    setTimeout(() => { t.style.opacity = "0"; }, 2000);
+    const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1";
+    setTimeout(() => t.style.opacity = "0", 2000);
 }
 </script>
 </body>
