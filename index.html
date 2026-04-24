@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v3.2</title>
+    <title>Suderpanda GPX v3.3</title>
     <style>
         :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
         body { font-family: system-ui, sans-serif; background: var(--bg); padding: 15px; color: #2d3436; margin: 0; }
@@ -35,8 +35,8 @@
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX v3.2 (點位全保留版)</h1>
-    <textarea id="coordsInput" placeholder="在此貼上座標... (支援格式: 緯度,經度 或 緯度 經度)"></textarea>
+    <h1>🐼 Suderpanda v3.3 (象限排序回歸版)</h1>
+    <textarea id="coordsInput" placeholder="在此貼上座標..."></textarea>
 
     <div class="stats-panel">
         <div class="stats-row">
@@ -59,8 +59,8 @@
     </div>
 
     <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">
-        💡 <b>點位遺漏解決：</b>此版本不再使用象限切割，保證所有座標都會顯示。<br>
-        💡 <b>手動微調：</b>長按重疊點可切換，點選兩點可交換。
+        💡 <b>象限排序：</b>已恢復分區管理，路線會優先在局部區域跑完再跳區。<br>
+        💡 <b>交互：</b>長按(右鍵)重疊處可循環切換點位。
     </div>
     <ul id="sortableList"></ul>
 </div>
@@ -81,67 +81,84 @@ window.onload = () => {
     canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); handleMapLongPress(e); });
 };
 
-// --- 精簡強大分析邏輯 ---
+// --- 分區與排序核心 ---
+function splitToFour(pts) {
+    if (pts.length === 0) return [[],[],[],[]];
+    let lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
+    let midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    let midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+    let res = [[],[],[],[]]; // 0:NE, 1:NW, 2:SW, 3:SE
+    pts.forEach(p => {
+        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p);
+        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p);
+        else if (p.lat < midLat && p.lon < midLon) res[2].push(p);
+        else res[3].push(p);
+    });
+    return res;
+}
+
 function analyzePoints() {
     const input = document.getElementById('coordsInput').value.trim();
-    if (!input) return;
-
     let raw = [];
-    const lines = input.split('\n');
-    
-    lines.forEach(line => {
-        // 同時支援逗號、空格、或 TAB 分隔
-        const parts = line.trim().split(/[,|\s\t]+/);
-        if (parts.length >= 2) {
-            const lat = parseFloat(parts[0]);
-            const lon = parseFloat(parts[1]);
-            if (!isNaN(lat) && !isNaN(lon)) {
-                raw.push({ lat, lon });
-            }
+    input.split('\n').forEach(line => {
+        let p = line.trim().split(/[,|\s\t]+/);
+        if (p.length >= 2) {
+            let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
+            if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon});
         }
     });
 
-    if (raw.length === 0) {
-        showToast("無效座標，請檢查格式");
-        return;
-    }
-
-    // 只過濾掉座標完全一致的死點 (小數點 6 位一致)
-    masterCenters = raw.filter((p, i, self) => 
-        i === self.findIndex(t => Math.abs(t.lat - p.lat) < 1e-7 && Math.abs(t.lon - p.lon) < 1e-7)
-    );
-
-    // 直接執行 TSP 排序，確保路徑不打結且不遺漏
-    masterCenters = runTSP(masterCenters);
+    if (raw.length === 0) return;
     
+    // 過濾極端重合點
+    raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7));
+
+    // 重新套用雙層象限邏輯
+    let bigQ = splitToFour(raw);
+    let allSorted = [];
+    
+    // 依序提取大象限 (NE -> NW -> SW -> SE)
+    const bigOrder = [0, 1, 2, 3];
+    bigOrder.forEach(bqIdx => {
+        if (bigQ[bqIdx].length > 0) {
+            let subQ = splitToFour(bigQ[bqIdx]);
+            // 內層小象限同樣進行 TSP 排序
+            const subOrder = [0, 1, 2, 3];
+            subOrder.forEach(sqIdx => {
+                if (subQ[sqIdx].length > 0) {
+                    allSorted.push(...runTSP(subQ[sqIdx]));
+                }
+            });
+        }
+    });
+
+    masterCenters = allSorted;
     document.getElementById('pointCount').innerText = masterCenters.length;
-    showToast(`載入成功：共 ${masterCenters.length} 個點`);
+    showToast(`排序完成：共 ${masterCenters.length} 個點`);
     renderAll();
 }
 
 function runTSP(points) {
     if (points.length <= 1) return [...points];
-    let pool = [...points];
-    let ordered = [pool.splice(0, 1)[0]];
-    
-    while (pool.length > 0) {
+    let pool = [...points], ordered = [pool.splice(0,1)[0]];
+    while(pool.length > 0) {
         let best = 0, minDist = Infinity;
-        let last = ordered[ordered.length - 1];
-        for (let i = 0; i < pool.length; i++) {
-            // 平方距離計算最鄰近點
-            let d = Math.pow(pool[i].lat - last.lat, 2) + Math.pow(pool[i].lon - last.lon, 2);
-            if (d < minDist) { minDist = d; best = i; }
-        }
+        let last = ordered[ordered.length-1];
+        pool.forEach((p, i) => {
+            let d = Math.pow(p.lat - last.lat, 2) + Math.pow(p.lon - last.lon, 2);
+            if(d < minDist) { minDist = d; best = i; }
+        });
         ordered.push(pool.splice(best, 1)[0]);
     }
     return ordered;
 }
 
-// --- 交互功能 (短按交換, 長按切換重疊點) ---
+// --- 交互與地圖渲染 (維持 3.2 版優點) ---
 function handleMapClick(e) {
     if (masterCenters.length === 0) return;
-    const pos = getMousePos(e);
-    const idx = getClickedPointIndex(pos.x, pos.y);
+    const rect = document.getElementById('mapCanvas').getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const idx = getClickedIdx(x, y);
     if (idx !== -1) {
         if (selectedIndex === null) {
             selectedIndex = idx;
@@ -149,7 +166,7 @@ function handleMapClick(e) {
         } else {
             if (selectedIndex !== idx) {
                 [masterCenters[selectedIndex], masterCenters[idx]] = [masterCenters[idx], masterCenters[selectedIndex]];
-                showToast(`交換完成`);
+                showToast(`已交換`);
             }
             selectedIndex = null;
             renderAll();
@@ -160,22 +177,18 @@ function handleMapClick(e) {
 
 function handleMapLongPress(e) {
     if (masterCenters.length === 0) return;
-    const pos = getMousePos(e);
-    let nearby = masterCenters.map((_, i) => i).filter(i => getPointDist(i, pos.x, pos.y) < 30);
+    const rect = document.getElementById('mapCanvas').getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    let nearby = masterCenters.map((_, i) => i).filter(i => getDistToClick(i, x, y) < 30);
     if (nearby.length > 1) {
         let cur = nearby.indexOf(selectedIndex);
         selectedIndex = nearby[(cur + 1) % nearby.length];
-        showToast(`循環切換：已選中 #${selectedIndex + 1}`);
+        showToast(`切換至 #${selectedIndex + 1}`);
         drawMap();
     }
 }
 
-function getMousePos(e) {
-    const rect = document.getElementById('mapCanvas').getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-}
-
-function getPointDist(idx, clickX, clickY) {
+function getDistToClick(idx, cx, cy) {
     const canvas = document.getElementById('mapCanvas');
     const rect = canvas.getBoundingClientRect();
     const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
@@ -183,15 +196,14 @@ function getPointDist(idx, clickX, clickY) {
     const pad = 40;
     const getX = (lon) => pad + (maxLon === minLon ? (rect.width-pad*2)/2 : (lon - minLon) / (maxLon - minLon) * (rect.width - pad * 2));
     const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
-    return Math.hypot(getX(masterCenters[idx].lon) - clickX, getY(masterCenters[idx].lat) - clickY);
+    return Math.hypot(getX(masterCenters[idx].lon) - cx, getY(masterCenters[idx].lat) - cy);
 }
 
-function getClickedPointIndex(x, y) {
-    for (let i = 0; i < masterCenters.length; i++) if (getPointDist(i, x, y) < 22) return i;
+function getClickedIdx(x, y) {
+    for (let i = 0; i < masterCenters.length; i++) if (getDistToClick(i, x, y) < 22) return i;
     return -1;
 }
 
-// --- 統計渲染 ---
 function updateStats() {
     if (masterCenters.length < 1) return;
     let totalMeters = 0, allSteps = [];
@@ -217,9 +229,8 @@ function updateStats() {
         totalMeters += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
     const km = totalMeters / 1000;
-    const speed = parseFloat(document.getElementById('speedInput').value) || 1;
     document.getElementById('totalDist').innerText = km.toFixed(2);
-    document.getElementById('totalTime').innerText = Math.round((km / speed) * 60);
+    document.getElementById('totalTime').innerText = Math.round((km / (parseFloat(document.getElementById('speedInput').value) || 1)) * 60);
 }
 
 function renderAll() { renderList(); drawMap(); updateStats(); }
@@ -229,9 +240,7 @@ function renderList() {
     list.innerHTML = "";
     masterCenters.forEach((p, i) => {
         const li = document.createElement('li');
-        li.className = 'sort-item';
-        li.dataset.index = i;
-        li.innerText = i + 1;
+        li.className = 'sort-item'; li.dataset.index = i; li.innerText = i + 1;
         li.addEventListener('touchstart', (e) => { dragEl = e.currentTarget; dragEl.classList.add('dragging'); });
         li.addEventListener('touchmove', handleTouchMove);
         li.addEventListener('touchend', () => { if(dragEl) dragEl.classList.remove('dragging'); updateFromList(); });
@@ -266,7 +275,6 @@ function drawMap() {
     ctx.beginPath(); ctx.strokeStyle = "#f1c40f"; ctx.setLineDash([4,2]);
     masterCenters.forEach((p, i) => { const x = getX(p.lon), y = getY(p.lat); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
     ctx.stroke(); ctx.setLineDash([]);
-
     masterCenters.forEach((p, i) => {
         const x = getX(p.lon), y = getY(p.lat);
         if (i === selectedIndex) { ctx.strokeStyle = "#ffeb3b"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI*2); ctx.stroke(); }
@@ -299,7 +307,7 @@ function copyFinalGPX() { navigator.clipboard.writeText(buildGPXString()).then((
 function downloadFinalGPX() {
     const blob = new Blob([buildGPXString()], {type: 'application/gpx+xml'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_v32_${Date.now()}.gpx`; a.click();
+    a.download = `Suderpanda_v33_${Date.now()}.gpx`; a.click();
 }
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
 </script>
