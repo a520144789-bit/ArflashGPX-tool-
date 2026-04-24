@@ -3,54 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v2.6</title>
+    <title>Suderpanda GPX v2.7</title>
     <style>
         :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
         body { font-family: system-ui, sans-serif; background: var(--bg); padding: 15px; color: #2d3436; margin: 0; }
-        .card { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: var(--primary); font-size: 20px; margin-bottom: 15px; }
-        textarea { width: 100%; height: 80px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 10px; box-sizing: border-box; font-size: 13px; margin-bottom: 10px; }
+        .card { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: var(--primary); font-size: 18px; margin-bottom: 12px; }
+        textarea { width: 100%; height: 60px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 8px; box-sizing: border-box; font-size: 12px; margin-bottom: 10px; }
         
-        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 15px; height: 350px; overflow: hidden; border: 1px solid #dcdde1; }
+        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 15px; height: 320px; overflow: hidden; border: 1px solid #dcdde1; }
         canvas { width: 100%; height: 100%; display: block; }
         
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; }
-        button { padding: 12px 5px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; color: white; }
+        button { padding: 12px 2px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; color: white; }
         .btn-analyze { background: var(--success); }
         .btn-copy { background: #0984e3; }
         .btn-download { background: var(--primary); }
 
-        /* 排序清單優化 */
-        #sortableList { list-style: none; padding: 0; margin: 0; }
-        .sort-item { 
-            background: #fff; border: 1px solid #eee; padding: 12px; border-radius: 10px; 
-            margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; 
-            font-size: 14px; touch-action: none; /* 重要：防止瀏覽器預設滾動 */
-            user-select: none;
+        /* 網格化排序清單 */
+        #sortableList { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); 
+            gap: 10px; 
+            padding: 0; 
+            margin: 0; 
         }
-        .sort-item.dragging { background: #e0e0ff; border: 2px dashed var(--primary); opacity: 0.8; }
-        .sort-item .idx { background: var(--primary); color: white; width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; margin-right: 10px; }
+        .sort-item { 
+            background: #fff; border: 2px solid #eee; height: 50px; border-radius: 12px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 16px; font-weight: bold; color: var(--primary);
+            touch-action: none; user-select: none; position: relative;
+        }
+        .sort-item.dragging { background: #e0e0ff; border-color: var(--primary); transform: scale(1.1); z-index: 100; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         
-        #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 8px 20px; border-radius: 20px; font-size: 13px; opacity: 0; transition: 0.3s; z-index: 1000; }
+        #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 8px 20px; border-radius: 20px; font-size: 13px; opacity: 0; transition: 0.3s; z-index: 1000; pointer-events: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>🐼 GPX v2.6 (手機拖曳版)</h1>
+    <h1>🐼 GPX v2.7 (雙層象限 & 網格版)</h1>
     <textarea id="coordsInput" placeholder="貼上座標..."></textarea>
 
     <div class="btn-group">
-        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析</button>
-        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製</button>
-        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載</button>
+        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析排序</button>
+        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製內容</button>
+        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
     </div>
 
     <div class="map-container">
         <canvas id="mapCanvas"></canvas>
     </div>
 
-    <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">👇 <b>長按並上下拖動</b> 數字塊可調整順序：</div>
+    <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">👇 <b>長按編號</b>可拖曳排序（1 🟢 ➜ 末 🔴）：</div>
     <ul id="sortableList"></ul>
 </div>
 
@@ -58,10 +63,37 @@
 
 <script>
 let masterCenters = [];
+let dragEl = null;
 const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 
-// --- 解析與核心邏輯 (同前版) ---
+// --- 雙層象限核心邏輯 ---
+function splitToFour(pts) {
+    if (pts.length === 0) return [[],[],[],[]];
+    let lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
+    let midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    let midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+    let res = [[],[],[],[]];
+    pts.forEach(p => {
+        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p); // Q1(NE)
+        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p); // Q2(NW)
+        else if (p.lat < midLat && p.lon < midLon) res[2].push(p); // Q3(SW)
+        else res[3].push(p); // Q4(SE)
+    });
+    return res;
+}
+
+function extractOrdered(quads, orderArray) {
+    let result = [];
+    orderArray.forEach(idx => {
+        if (quads[idx] && quads[idx].length > 0) {
+            // 在每一最小單位內執行 TSP 以確保局部最短
+            result.push(...runTSP(quads[idx], 0));
+        }
+    });
+    return result;
+}
+
 function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value;
     let raw = [];
@@ -75,26 +107,35 @@ function analyzePoints() {
     if (raw.length === 0) return;
     raw = raw.filter((p, i, self) => i === self.findIndex(t => t.lat === p.lat && t.lon === p.lon));
 
-    let minLat = Math.min(...raw.map(p => p.lat)), maxLat = Math.max(...raw.map(p => p.lat));
-    let minLon = Math.min(...raw.map(p => p.lon)), maxLon = Math.max(...raw.map(p => p.lon));
-    let cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
-
-    let q = [[], [], [], []];
-    raw.forEach(p => {
-        if (p.lat >= cLat && p.lon >= cLon) q[0].push(p);
-        else if (p.lat >= cLat && p.lon < cLon) q[1].push(p);
-        else if (p.lat < cLat && p.lon < cLon) q[2].push(p);
-        else q[3].push(p);
-    });
+    // 1. 第一層切分 (大象限)
+    let BigQ = splitToFour(raw);
+    
+    // 2. 第二層切分 (小象限)
+    let subQ = BigQ.map(q => splitToFour(q));
 
     masterCenters = [];
-    [0,1,2,3].forEach(i => { masterCenters.push(...runTSP(q[i], 0)); });
+    // 執行你指定的自定義順序：
+    // Q1 ➜ 4,1,2
+    masterCenters.push(...extractOrdered(subQ[0], [3, 0, 1]));
+    // Q2 ➜ 1,2,3
+    masterCenters.push(...extractOrdered(subQ[1], [0, 1, 2]));
+    // Q3 ➜ 2,3,4
+    masterCenters.push(...extractOrdered(subQ[2], [1, 2, 3]));
+    // Q4 ➜ 3,4,1
+    masterCenters.push(...extractOrdered(subQ[3], [2, 3, 0]));
+    
+    // 補齊剩餘順序：Q4.2 ➜ Q3.1 ➜ Q2.4 ➜ Q1.3
+    masterCenters.push(...extractOrdered(subQ[3], [1]));
+    masterCenters.push(...extractOrdered(subQ[2], [0]));
+    masterCenters.push(...extractOrdered(subQ[1], [3]));
+    masterCenters.push(...extractOrdered(subQ[0], [2]));
+
     renderAll();
-    showToast("🔍 分析完成");
+    showToast("🔍 雙層象限排序完成");
 }
 
 function runTSP(points, startIdx) {
-    if (points.length === 0) return [];
+    if (points.length <= 1) return points;
     let pool = [...points], ordered = [], current = pool.splice(startIdx, 1)[0];
     ordered.push(current);
     while(pool.length > 0) {
@@ -109,9 +150,7 @@ function runTSP(points, startIdx) {
     return ordered;
 }
 
-// --- 手機觸控拖拽實作 ---
-let dragEl = null;
-
+// --- 手機網格拖拽介面 ---
 function renderSortableList() {
     const list = document.getElementById('sortableList');
     list.innerHTML = "";
@@ -119,13 +158,10 @@ function renderSortableList() {
         const li = document.createElement('li');
         li.className = 'sort-item';
         li.dataset.index = i;
-        li.innerHTML = `<div><span class="idx">${i+1}</span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div><span>⠿</span>`;
-        
-        // 觸控事件
+        li.innerText = i + 1;
         li.addEventListener('touchstart', handleTouchStart, {passive: false});
         li.addEventListener('touchmove', handleTouchMove, {passive: false});
         li.addEventListener('touchend', handleTouchEnd);
-        
         list.appendChild(li);
     });
 }
@@ -136,37 +172,30 @@ function handleTouchStart(e) {
 }
 
 function handleTouchMove(e) {
-    e.preventDefault(); // 鎖定螢幕滾動
+    e.preventDefault();
     const touch = e.touches[0];
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!target) return;
+    const closest = target.closest('.sort-item');
     const container = document.getElementById('sortableList');
-    const closestItem = target ? target.closest('.sort-item') : null;
-
-    if (closestItem && closestItem !== dragEl) {
-        const rect = closestItem.getBoundingClientRect();
-        const next = (touch.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
-        container.insertBefore(dragEl, next ? closestItem.nextSibling : closestItem);
+    if (closest && closest !== dragEl) {
+        const rect = closest.getBoundingClientRect();
+        const next = touch.clientX > rect.left + rect.width / 2;
+        container.insertBefore(dragEl, next ? closest.nextSibling : closest);
     }
 }
 
 function handleTouchEnd() {
     if (!dragEl) return;
     dragEl.classList.remove('dragging');
-    
-    // 重新抓取 DOM 順序更新數據
     const newList = Array.from(document.querySelectorAll('.sort-item'));
-    const newMaster = newList.map(li => masterCenters[parseInt(li.dataset.index)]);
-    masterCenters = newMaster;
-    
+    masterCenters = newList.map(li => masterCenters[parseInt(li.dataset.index)]);
     dragEl = null;
-    renderAll(); // 重新編號與畫圖
+    renderAll();
 }
 
-// --- 繪圖與導出 (同前版) ---
-function renderAll() {
-    renderSortableList();
-    drawMap();
-}
+// --- 繪圖與導出 ---
+function renderAll() { renderSortableList(); drawMap(); }
 
 function drawMap() {
     const canvas = document.getElementById('mapCanvas');
@@ -184,7 +213,7 @@ function drawMap() {
     const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
 
     ctx.clearRect(0,0,rect.width, rect.height);
-    ctx.beginPath(); ctx.strokeStyle = "rgba(241,196,15,0.7)"; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 1.5; ctx.setLineDash([4,2]);
     masterCenters.forEach((p, i) => {
         const x = getX(p.lon), y = getY(p.lat);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -193,9 +222,9 @@ function drawMap() {
     masterCenters.forEach((p, i) => {
         const x = getX(p.lon), y = getY(p.lat);
         ctx.fillStyle = (i === 0) ? "#2ecc71" : (i === masterCenters.length-1 ? "#e74c3c" : "#6c5ce7");
-        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = "white"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
-        ctx.fillText(i + 1, x, y - 8);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "white"; ctx.font = "bold 9px Arial"; ctx.textAlign = "center";
+        ctx.fillText(i + 1, x, y - 7);
     });
 }
 
@@ -230,7 +259,7 @@ function downloadFinalGPX() {
     if (masterCenters.length === 0) return;
     const blob = new Blob([buildGPX()], {type: 'application/gpx+xml'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_${Date.now()}.gpx`; a.click();
+    a.download = `Suderpanda_v27_${Date.now()}.gpx`; a.click();
 }
 
 function showToast(msg) {
