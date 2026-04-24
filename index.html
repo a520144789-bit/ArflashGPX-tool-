@@ -371,6 +371,7 @@ function drawMap() {
     ctx.setLineDash([]);
 
 // --- 繪製所有點位的子點與銜接路徑 ---
+// --- 繪製所有點位的子點與銜接路徑 ---
 masterCenters.forEach((p, i) => {
     const x = getX(p.lon), y = getY(p.lat);
     const rot = (p.rotation || 0) * 45;
