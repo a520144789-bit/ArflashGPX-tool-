@@ -52,7 +52,14 @@
             <span>預計耗時：<b id="totalTime">0</b> 分鐘</span>
         </div>
     </div>
-
+<div style="margin-bottom: 10px;">
+    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：</label>
+    <select id="gpxFormat" style="width: 100%; padding: 8px; border-radius: 10px; border: 2px solid #e2e8f0; font-size: 13px;">
+        <option value="arflash">ARflash 版本 (WPT 格式)</option>
+        <option value="joystick">JoyStick 版本 (TRK 格式)</option>
+    </select>
+</div>
+    
     <div class="btn-group-2">
         <button class="btn-undo" onclick="undo()">↩️ 撤銷 (Undo)</button>
         <button class="btn-redo" onclick="redo()">↪️ 重做 (Redo)</button>
@@ -338,12 +345,17 @@ function drawMap() {
     });
 }
 
-function buildGPXString() {
-    const getQ = (c, t) => { let dL = t.lat-c.lat, dO = t.lon-c.lon; return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; };
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1">';
+// 生成所有路徑點位的陣列 (供輸出使用)
+function getAllSteps() {
+    let allSteps = [];
+    const getQ = (c, t) => { 
+        let dL = t.lat - c.lat, dO = t.lon - c.lon; 
+        return (dL >= 0 && dO >= 0) ? "NE" : (dL >= 0 && dO < 0) ? "NW" : (dL < 0 && dO < 0) ? "SW" : "SE"; 
+    };
+
     masterCenters.forEach((center, i) => {
-        let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length-1];
-        let next = i < masterCenters.length-1 ? masterCenters[i+1] : masterCenters[0];
+        let prev = i > 0 ? masterCenters[i - 1] : masterCenters[masterCenters.length - 1];
+        let next = i < masterCenters.length - 1 ? masterCenters[i + 1] : masterCenters[0];
         (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]).forEach((step, sub) => {
             let lat = center.lat, lon = center.lon;
             if (step !== "01") {
@@ -351,17 +363,56 @@ function buildGPXString() {
                 lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
                 lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
             }
-            gpx += `\n<wpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><name>M${String(i+1).padStart(2,'0')}.${sub+1}</name></wpt>`;
+            allSteps.push({ lat: lat.toFixed(6), lon: lon.toFixed(6), name: `M${String(i + 1).padStart(2, '0')}.${sub + 1}` });
         });
     });
-    return gpx + '\n</gpx>';
+    return allSteps;
+}
+
+function buildGPXString() {
+    const format = document.getElementById('gpxFormat').value;
+    const steps = getAllSteps();
+    const now = new Date();
+    const timeStr = `${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    if (format === 'joystick') {
+        // JoyStick 格式輸出
+        const startPoint = steps[0] ? `(${steps[0].lat},${steps[0].lon})` : "";
+        const fileName = `(JoyStick)_${timeStr}_${startPoint}`;
+        
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda GPX Tool">`;
+        gpx += `\n  <metadata><n>${fileName}</n></metadata>`;
+        gpx += `\n  <trk><name>${fileName}</name><trkseg>`;
+        
+        steps.forEach(p => {
+            gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`;
+        });
+        
+        gpx += `\n  </trkseg></trk>\n</gpx>`;
+        return gpx;
+    } else {
+        // 原本的 ARflash (WPT) 格式輸出
+        let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda GPX Tool">';
+        steps.forEach(p => {
+            gpx += `\n<wpt lat="${p.lat}" lon="${p.lon}"><name>${p.name}</name></wpt>`;
+        });
+        return gpx + '\n</gpx>';
+    }
 }
 
 function copyFinalGPX() { navigator.clipboard.writeText(buildGPXString()).then(() => showToast("📋 已複製 GPX")); }
 function downloadFinalGPX() {
-    const blob = new Blob([buildGPXString()], {type: 'application/gpx+xml'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_v38_${Date.now()}.gpx`; a.click();
+    if (masterCenters.length === 0) return;
+    const format = document.getElementById('gpxFormat').value;
+    const gpxString = buildGPXString();
+    const blob = new Blob([gpxString], { type: 'application/gpx+xml' });
+    const a = document.createElement('a');
+    
+    // 根據格式給予不同的自動檔名
+    const prefix = format === 'joystick' ? 'JoyStick' : 'ARflash';
+    a.href = URL.createObjectURL(blob);
+    a.download = `${prefix}_${Date.now()}.gpx`;
+    a.click();
 }
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
 </script>
