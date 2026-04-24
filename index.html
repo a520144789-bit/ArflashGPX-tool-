@@ -322,16 +322,27 @@ masterCenters.forEach((center, i) => {
         ctx.fill();
     });
 
-    // 5. 繪製母點與序號 (保持不變)
+  // 5. 繪製微型母點與偏移序號 (優化版)
     ctx.beginPath();
-    ctx.arc(x, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "#6c5ce7");
+    // 半徑從 7 縮小到 3，並增加透明度 (0.6)
+    ctx.arc(x, y, 3, 0, Math.PI * 2); 
+    ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "rgba(108, 92, 231, 0.6)");
     ctx.fill();
+
+    // 序號文字縮小並偏移 (移至右上角)，避免遮擋中心連線
     ctx.fillStyle = "white";
-    ctx.font = "bold 10px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(i + 1, x, y + 3.5);
-});
+    ctx.font = "bold 9px Arial"; 
+    ctx.textAlign = "left";
+    ctx.fillText(i + 1, x + 5, y - 5); 
+
+    // 如果被選中，只畫一個細圈標示，不填滿
+    if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(253, 203, 110, 0.8)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
     ctx.restore();
 }
 
