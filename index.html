@@ -239,14 +239,17 @@ function handleMapSingleClick(x, y) {
             selectedIndex = null; 
             showToast(`取消選取`);
         } else {
-            // --- 關鍵修改：從交換 [A,B] = [B,A] 改為 移位 ---
+            // 執行移位：將 selectedIndex 抽出並插入到 targetIdx
             const targetIdx = idx;
-            const movedItem = masterCenters.splice(selectedIndex, 1)[0]; // 抽出被選中的點
-            masterCenters.splice(targetIdx, 0, movedItem); // 插入到新位置
+            const fromName = selectedIndex + 1;
+            const toName = targetIdx + 1;
             
-            showToast(`已將 #${selectedIndex + 1} 移至 #${targetIdx + 1} 之後`);
+            const movedItem = masterCenters.splice(selectedIndex, 1)[0];
+            masterCenters.splice(targetIdx, 0, movedItem);
+            
+            showToast(`已將 #${fromName} 移至 #${toName} 的位置`);
             selectedIndex = null;
-            renderAll(); // 重新渲染，路徑會自動重連
+            renderAll(); 
         }
         drawMap();
     } else {
@@ -293,16 +296,23 @@ function renderList() {
         li.draggable = true;
         
         li.onclick = () => {
-            if (selectedIndex === i) selectedIndex = null;
-            else if (selectedIndex !== null) {
-                [masterCenters[selectedIndex], masterCenters[i]] = [masterCenters[i], masterCenters[selectedIndex]];
+            if (selectedIndex === i) {
                 selectedIndex = null;
-                showToast(`編號已交換`);
+            } else if (selectedIndex !== null) {
+                // 將原本的 Swap 改為 Move
+                const movedItem = masterCenters.splice(selectedIndex, 1)[0];
+                masterCenters.splice(i, 0, movedItem);
+                showToast(`已移動點位至 #${i + 1}`);
+                selectedIndex = null;
                 renderAll();
-            } else { selectedIndex = i; }
+                return; // 跳出避免重複觸發 renderAll(true)
+            } else { 
+                selectedIndex = i; 
+            }
             renderAll(true); 
         };
 
+        // 拖拽部分原本就是 Move 邏輯，保持不變
         li.ondragstart = (e) => { e.dataTransfer.setData("text", i); li.style.opacity = "0.4"; };
         li.ondragover = (e) => e.preventDefault();
         li.ondrop = (e) => {
@@ -319,7 +329,6 @@ function renderList() {
         list.appendChild(li);
     });
 }
-
 function renderAll(skipSave = false) {
     if (!skipSave) saveState();
     renderList();
