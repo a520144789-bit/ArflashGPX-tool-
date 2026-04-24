@@ -86,6 +86,11 @@
 <script>
 // --- 全域變數 ---
 let masterCenters = [];
+let mapScale = 1;
+let mapOffsetX = 0;
+let mapOffsetY = 0;
+let initialPinchDist = 0;
+let initialScale = 1;
 let selectedIndex = null;
 let lastClickTime = 0;
 let historyStack = [];
@@ -95,15 +100,61 @@ const RADIUS = 36, LAT_M_PER_DEG = 111132;
 const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
 
 // --- 初始化 ---
+// --- 觸控與縮放邏輯 ---
 window.onload = () => {
     const canvas = document.getElementById('mapCanvas');
+    
+    // 處理雙指縮放
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            initialPinchDist = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            initialScale = mapScale;
+        }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault(); // 防止網頁跟著捲動
+            const currentDist = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            mapScale = Math.min(Math.max(initialScale * (currentDist / initialPinchDist), 0.5), 5); // 限制縮放 0.5~5 倍
+            drawMap();
+        }
+    }, { passive: false });
+
+    // 原本的點擊邏輯保持不變...
     canvas.addEventListener('click', (e) => {
         const now = Date.now(), rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left, y = e.clientY - rect.top;
+        // 注意：這裡的點擊座標 (x, y) 也要考慮 mapScale 的影響
+        const x = (e.clientX - rect.left) / mapScale; 
+        const y = (e.clientY - rect.top) / mapScale;
         if (now - lastClickTime < 300) handleMapDoubleClick(x, y);
         else handleMapSingleClick(x, y);
         lastClickTime = now;
     });
+};
+
+// 修改後的 drawMap 部分片段
+function drawMap() {
+    const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d');
+    // ... 前段計算縮放與 padding 的代碼不變 ...
+
+    ctx.save(); // 保存狀態
+    // --- 關鍵：套用縮放 ---
+    // 讓 Canvas 以中心點縮放
+    ctx.translate(w/2, h/2);
+    ctx.scale(mapScale, mapScale);
+    ctx.translate(-w/2, -h/2);
+
+    // ... 原本的繪製背景、線條、點位的代碼 ...
+
+    ctx.restore(); // 恢復狀態，避免影響下次繪製
+}
 };
 
 // --- 歷史紀錄邏輯 ---
@@ -325,6 +376,10 @@ function drawMap() {
         ctx.fillStyle = "#1e272e";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         return;
+    }
+    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
     }
 
     canvas.width = canvas.clientWidth;
