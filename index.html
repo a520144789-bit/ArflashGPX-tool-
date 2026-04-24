@@ -3,56 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suderpanda GPX v2.4</title>
+    <title>Suderpanda GPX v2.5</title>
     <style>
-        :root { --primary: #6c5ce7; --bg: #f8f9fa; }
+        :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
         body { font-family: system-ui, sans-serif; background: var(--bg); padding: 20px; color: #2d3436; }
         .card { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: var(--primary); font-size: 22px; margin-bottom: 15px; }
         textarea { width: 100%; height: 100px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px; box-sizing: border-box; font-size: 13px; margin-bottom: 15px; }
         
-        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 20px; height: 400px; overflow: hidden; border: 2px solid #dcdde1; }
+        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 20px; height: 380px; overflow: hidden; border: 2px solid #dcdde1; }
         canvas { width: 100%; height: 100%; display: block; }
-        .legend { position: absolute; top: 10px; left: 10px; color: #dcdde1; font-size: 11px; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; pointer-events: none; line-height: 1.5; }
+        .legend { position: absolute; top: 10px; left: 10px; color: #dcdde1; font-size: 11px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 8px; pointer-events: none; line-height: 1.5; z-index: 10; }
 
-        #sortableList { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-        .sort-item { 
-            background: #fff; border: 1px solid #eee; padding: 8px 12px; border-radius: 10px; 
-            cursor: grab; display: flex; align-items: center; justify-content: space-between; font-size: 12px;
-        }
-        .sort-item:active { cursor: grabbing; border-color: var(--primary); }
-        .sort-item .idx { background: var(--primary); color: white; width: 18px; height: 18px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; margin-right: 8px; font-weight: bold; }
-
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        button { padding: 14px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 15px; }
-        .btn-analyze { background: #00b894; color: white; }
-        .btn-final { background: var(--primary); color: white; }
+        .btn-group { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        button { padding: 14px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .btn-analyze { background: var(--success); color: white; }
+        .btn-copy { background: #0984e3; color: white; }
+        .btn-download { background: var(--primary); color: white; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+
+        #sortableList { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+        .sort-item { background: #fff; border: 1px solid #eee; padding: 10px; border-radius: 10px; cursor: grab; display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+        .sort-item:active { cursor: grabbing; border-color: var(--primary); background: #f1f2f6; }
+        .sort-item .idx { background: var(--primary); color: white; width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; margin-right: 10px; }
+        
+        /* 複製成功提示 */
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #2d3436; color: white; padding: 10px 25px; border-radius: 50px; font-size: 14px; opacity: 0; transition: 0.3s; z-index: 100; pointer-events: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX v2.4 (編號視覺化)</h1>
+    <h1>🐼 Suderpanda GPX v2.5 (快速複製版)</h1>
     
-    <textarea id="coordsInput" placeholder="貼上座標 (緯度, 經度)..."></textarea>
+    <textarea id="coordsInput" placeholder="貼上原始座標 (緯度, 經度)..."></textarea>
 
     <div class="btn-group">
-        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析並生成預覽</button>
-        <button class="btn-final" onclick="generateFinalGPX()">🚀 下載最終 GPX</button>
+        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析預覽</button>
+        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製 GPX</button>
+        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
     </div>
 
     <div class="map-container">
         <div class="legend">
-            🟢 起點 | 🔴 終點 | 🟡 路徑線<br>
-            數字：大點排序 (M01, M02...)
+            🟢 起點 | 🔴 終點 | 數字：大點順序<br>
+            黃虛線：目前行進路徑預覽
         </div>
         <canvas id="mapCanvas"></canvas>
     </div>
 
-    <div style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px; font-weight: bold;">拖拽下方項目可手動調整順序：</div>
+    <div style="font-size: 13px; color: #636e72; margin-bottom: 10px;">💡 <b>拖拽編號</b>可重新排序，路徑圖會同步更新：</div>
     <ul id="sortableList"></ul>
 </div>
+
+<div id="toast">✅ GPX 已複製到剪貼簿</div>
 
 <script>
 let masterCenters = [];
@@ -60,6 +65,7 @@ let dragIdx = null;
 const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 
+// 第一步：分析與渲染
 function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value;
     let raw = [];
@@ -71,10 +77,10 @@ function analyzePoints() {
         }
     });
 
-    if (raw.length === 0) return alert("請輸入座標");
+    if (raw.length === 0) return alert("請輸入座標內容");
     raw = raw.filter((p, i, self) => i === self.findIndex(t => t.lat === p.lat && t.lon === p.lon));
 
-    // 初始四象限 TSP
+    // 初始四象限算法
     let minLat = Math.min(...raw.map(p => p.lat)), maxLat = Math.max(...raw.map(p => p.lat));
     let minLon = Math.min(...raw.map(p => p.lon)), maxLon = Math.max(...raw.map(p => p.lon));
     let cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
@@ -94,6 +100,7 @@ function analyzePoints() {
     masterCenters.push(...runTSP(q[3], 0));
 
     renderAll();
+    showToast("🔍 分析完成，路徑已生成");
 }
 
 function renderAll() {
@@ -101,12 +108,11 @@ function renderAll() {
     drawMap();
 }
 
+// 視覺化畫布
 function drawMap() {
     const canvas = document.getElementById('mapCanvas');
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
-    
-    // 設定畫布尺寸
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
@@ -128,11 +134,11 @@ function drawMap() {
 
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // 1. 畫連線
+    // 畫路徑線
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; // 半透明黃色
+    ctx.strokeStyle = "rgba(241, 196, 15, 0.7)";
     ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]); // 虛線增加質感
+    ctx.setLineDash([6, 4]);
     masterCenters.forEach((p, i) => {
         const x = getX(p.lon), y = getY(p.lat);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -140,32 +146,28 @@ function drawMap() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 2. 畫點位與編號
+    // 畫大點與標號
     masterCenters.forEach((p, i) => {
         const x = getX(p.lon), y = getY(p.lat);
-        
-        // 點位本體
         ctx.fillStyle = (i === 0) ? "#2ecc71" : (i === masterCenters.length - 1 ? "#e74c3c" : "#6c5ce7");
         ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        // 繪製編號文字
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 11px Arial";
+        ctx.fillStyle = "white";
+        ctx.font = "bold 12px sans-serif";
         ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        // 增加文字陰影提高閱讀性
         ctx.shadowColor = "black";
         ctx.shadowBlur = 4;
-        ctx.fillText(i + 1, x, y - 8);
+        ctx.fillText(i + 1, x, y - 10);
         ctx.shadowBlur = 0;
     });
 }
 
+// 渲染清單
 function renderSortableList() {
     const list = document.getElementById('sortableList');
     list.innerHTML = "";
@@ -173,8 +175,7 @@ function renderSortableList() {
         const li = document.createElement('li');
         li.className = 'sort-item';
         li.draggable = true;
-        li.innerHTML = `<div><span class="idx">${i+1}</span>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div><span style="color:#ccc">⠿</span>`;
-        
+        li.innerHTML = `<div><span class="idx">${i+1}</span>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div><span>⠿</span>`;
         li.addEventListener('dragstart', () => { dragIdx = i; });
         li.addEventListener('dragover', (e) => e.preventDefault());
         li.addEventListener('drop', () => {
@@ -202,11 +203,12 @@ function runTSP(points, startIdx) {
     return ordered;
 }
 
-function generateFinalGPX() {
+// 生成 GPX 字串 (包含 20 條邏輯)
+function buildGPXString() {
     const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
     const getQ = (c, t) => { let dLat = t.lat-c.lat, dLon = t.lon-c.lon; if(dLat>=0 && dLon>=0) return "NE"; if(dLat>=0 && dLon<0) return "NW"; if(dLat<0 && dLon<0) return "SW"; return "SE"; };
 
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-V24">';
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-V25">';
     masterCenters.forEach((center, i) => {
         let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length-1];
         let next = i < masterCenters.length-1 ? masterCenters[i+1] : masterCenters[0];
@@ -222,13 +224,44 @@ function generateFinalGPX() {
             gpx += `\n<wpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><name>M${String(i+1).padStart(2,'0')}.${sub+1}</name></wpt>`;
         });
     });
-    gpx += '\n</gpx>';
+    return gpx + '\n</gpx>';
+}
 
+// 執行複製
+async function copyFinalGPX() {
+    if (masterCenters.length === 0) return alert("請先進行分析");
+    const gpx = buildGPXString();
+    try {
+        await navigator.clipboard.writeText(gpx);
+        showToast("📋 GPX 已複製到剪貼簿");
+    } catch (err) {
+        // 備用複製法
+        const el = document.createElement('textarea');
+        el.value = gpx;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        showToast("📋 GPX 已複製 (備用模式)");
+    }
+}
+
+// 執行下載
+function downloadFinalGPX() {
+    if (masterCenters.length === 0) return alert("請先進行分析");
+    const gpx = buildGPXString();
     const blob = new Blob([gpx], {type: 'application/gpx+xml'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_V24_${new Date().getTime()}.gpx`;
+    a.download = `Suderpanda_V25_${new Date().getTime()}.gpx`;
     a.click();
+}
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.style.opacity = "1";
+    setTimeout(() => { t.style.opacity = "0"; }, 2000);
 }
 </script>
 </body>
