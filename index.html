@@ -417,39 +417,72 @@ function drawMap() {
 // --- 其他功能 ---
 function handleMapSingleClick(x, y) {
     const canvas = document.getElementById('mapCanvas');
-    // 計算考慮了縮放與偏移後的真實座標
-    const realX = (x - canvas.width/2) / mapScale - offsetX + canvas.width/2;
-    const realY = (y - canvas.height/2) / mapScale - offsetY + canvas.height/2;
+    const dpr = window.devicePixelRatio || 1;
+    
+    // 取得畫布邏輯寬高 (CSS size)
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+
+    /**
+     * 座標逆運算邏輯：
+     * 1. 減去中心偏移 (w/2, h/2)
+     * 2. 除以縮放倍率 mapScale
+     * 3. 減去平移偏移 offsetX/offsetY
+     * 4. 加回中心偏移
+     */
+    const realX = (x - w / 2) / mapScale - offsetX + w / 2;
+    const realY = (y - h / 2) / mapScale - offsetY + h / 2;
 
     let clickedIdx = -1;
+    // 判定範圍隨縮放調整：放大時判定半徑變小，避免誤觸
+    const touchRadius = 22 / mapScale > 10 ? 22 / mapScale : 10; 
+
     for (let i = 0; i < masterCenters.length; i++) {
-        if (getDistToPoint(i, realX, realY) < 22) { clickedIdx = i; break; }
+        if (getDistToPoint(i, realX, realY) < touchRadius) { 
+            clickedIdx = i; 
+            break; 
+        }
     }
 
     if (clickedIdx !== -1) {
-        if (selectedIndex === null) { selectedIndex = clickedIdx; showToast(`選中 #${clickedIdx + 1}`); }
-        else if (selectedIndex === clickedIdx) { selectedIndex = null; }
-        else {
+        if (selectedIndex === null) { 
+            selectedIndex = clickedIdx; 
+            showToast(`選中 #${clickedIdx + 1}`); 
+        } else if (selectedIndex === clickedIdx) { 
+            selectedIndex = null; 
+        } else {
+            saveState();
             const item = masterCenters.splice(selectedIndex, 1)[0];
             masterCenters.splice(clickedIdx, 0, item);
             selectedIndex = null;
-            renderAll();
+            renderAll(true);
         }
         drawMap();
-    } else { selectedIndex = null; drawMap(); }
+    } else { 
+        selectedIndex = null; 
+        drawMap(); 
+    }
 }
 
-function getDistToPoint(idx, cx, cy) {
+function getDistToPoint(idx, realX, realY) {
     const canvas = document.getElementById('mapCanvas');
-    const w = canvas.width, h = canvas.height;
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+
+    // 重新取得計算座標所需的變數（與 drawMap 邏輯一致）
     const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLon = Math.min(...lons), maxLon = Math.max(...lons);
     const lonModifier = Math.cos(lats[0] * Math.PI / 180);
-    const scale = Math.min((w - 80) / (((maxLon - minLon) * lonModifier) || 0.0001), (h - 80) / ((maxLat - minLat) || 0.0001));
-    const tx = w/2 + (masterCenters[idx].lon - (minLon + maxLon)/2) * lonModifier * scale;
-    const ty = h/2 - (masterCenters[idx].lat - (minLat + maxLat)/2) * scale;
-    return Math.hypot(tx - cx, ty - cy);
+    
+    const pad = 40;
+    const scale = Math.min((w - pad * 2) / (((maxLon - minLon) * lonModifier) || 0.0001), (h - pad * 2) / ((maxLat - minLat) || 0.0001));
+
+    // 這是該點在畫布上的「邏輯座標」
+    const tx = w / 2 + (masterCenters[idx].lon - (minLon + maxLon) / 2) * lonModifier * scale;
+    const ty = h / 2 - (masterCenters[idx].lat - (minLat + maxLat) / 2) * scale;
+
+    return Math.hypot(tx - realX, ty - realY);
 }
 
 function handleMapDoubleClick(x, y) { /* 保留原本邏輯 */ }
