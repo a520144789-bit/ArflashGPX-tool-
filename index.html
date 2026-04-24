@@ -57,6 +57,7 @@
     <select id="gpxFormat" style="width: 100%; padding: 8px; border-radius: 10px; border: 2px solid #e2e8f0; font-size: 13px;">
         <option value="arflash">ARflash 版本 (WPT 格式)</option>
         <option value="joystick">JoyStick 版本 (TRK 格式)</option>
+        <option value="phantom">魅影版本 (WPT+命名)</option>
     </select>
 </div>
     
@@ -372,32 +373,42 @@ function getAllSteps() {
 function buildGPXString() {
     const format = document.getElementById('gpxFormat').value;
     const steps = getAllSteps();
+    
+    // 生成時間與座標資訊後綴 (例如: 0424_1920_(24.12,120.64))
     const now = new Date();
     const timeStr = `${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    
+    const startCoord = steps.length > 0 ? `(${parseFloat(steps[0].lat).toFixed(2)},${parseFloat(steps[0].lon).toFixed(2)})` : "(0,0)";
+    const suffix = `${timeStr}_${startCoord}`;
+
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda GPX Tool">`;
+
     if (format === 'joystick') {
-        // JoyStick 格式輸出
-        const startPoint = steps[0] ? `(${steps[0].lat},${steps[0].lon})` : "";
-        const fileName = `(JoyStick)_${timeStr}_${startPoint}`;
-        
-        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda GPX Tool">`;
-        gpx += `\n  <metadata><n>${fileName}</n></metadata>`;
-        gpx += `\n  <trk><name>${fileName}</name><trkseg>`;
-        
+        // --- JoyStick (TRK 格式) ---
+        const trackName = `(JoyStick)_${suffix}`;
+        gpx += `\n  <metadata><n>${trackName}</n></metadata>`;
+        gpx += `\n  <trk><name>${trackName}</name><trkseg>`;
         steps.forEach(p => {
             gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`;
         });
-        
         gpx += `\n  </trkseg></trk>\n</gpx>`;
-        return gpx;
+
+    } else if (format === 'phantom') {
+        // --- 魅影 (WPT 格式 + 特定命名) ---
+        gpx += `\n  <metadata><n>魅影_${suffix}</n></metadata>`;
+        steps.forEach((p, idx) => {
+            gpx += `\n  <wpt lat="${p.lat}" lon="${p.lon}"><n>P${idx + 1}_${suffix}</n></wpt>`;
+        });
+        gpx += `\n</gpx>`;
+
     } else {
-        // 原本的 ARflash (WPT) 格式輸出
-        let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda GPX Tool">';
+        // --- ARflash (原版 WPT 格式) ---
         steps.forEach(p => {
             gpx += `\n<wpt lat="${p.lat}" lon="${p.lon}"><name>${p.name}</name></wpt>`;
         });
-        return gpx + '\n</gpx>';
+        gpx += `\n</gpx>`;
     }
+
+    return gpx;
 }
 
 function copyFinalGPX() { navigator.clipboard.writeText(buildGPXString()).then(() => showToast("📋 已複製 GPX")); }
@@ -408,8 +419,10 @@ function downloadFinalGPX() {
     const blob = new Blob([gpxString], { type: 'application/gpx+xml' });
     const a = document.createElement('a');
     
-    // 根據格式給予不同的自動檔名
-    const prefix = format === 'joystick' ? 'JoyStick' : 'ARflash';
+    // 檔名前綴對應
+    const names = { 'arflash': 'ARflash', 'joystick': 'JoyStick', 'phantom': '魅影' };
+    const prefix = names[format] || 'GPX';
+    
     a.href = URL.createObjectURL(blob);
     a.download = `${prefix}_${Date.now()}.gpx`;
     a.click();
