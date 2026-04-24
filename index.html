@@ -88,6 +88,11 @@
 // --- 全域變數 ---
 let masterCenters = [];
 let mapScale = 1;
+let offsetX = 0; // 畫布 X 偏移
+let offsetY = 0; // 畫布 Y 偏移
+let isDragging = false; // 是否正在拖拽
+let lastMouseX = 0;
+let lastMouseY = 0;
 let initialPinchDist = 0;
 let initialScale = 1;
 let selectedIndex = null;
@@ -102,28 +107,57 @@ const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135
 window.onload = () => {
     const canvas = document.getElementById('mapCanvas');
     
+    // 觸控事件 (縮放 + 雙指拖拽)
     canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
-            initialPinchDist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
+            initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             initialScale = mapScale;
+        } else if (e.touches.length === 1) {
+            isDragging = true;
+            lastMouseX = e.touches[0].pageX;
+            lastMouseY = e.touches[0].pageY;
         }
     });
 
     canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
         if (e.touches.length === 2) {
-            e.preventDefault();
-            const currentDist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
+            const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             mapScale = Math.min(Math.max(initialScale * (currentDist / initialPinchDist), 0.5), 8); 
+            drawMap();
+        } else if (e.touches.length === 1 && isDragging) {
+            const dx = e.touches[0].pageX - lastMouseX;
+            const dy = e.touches[0].pageY - lastMouseY;
+            offsetX += dx / mapScale;
+            offsetY += dy / mapScale;
+            lastMouseX = e.touches[0].pageX;
+            lastMouseY = e.touches[0].pageY;
             drawMap();
         }
     }, { passive: false });
 
+    canvas.addEventListener('touchend', () => { isDragging = false; });
+
+    // 滑鼠事件 (電腦端預覽用)
+    canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            offsetX += dx / mapScale;
+            offsetY += dy / mapScale;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            drawMap();
+        }
+    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // 單擊與雙擊判定
     canvas.addEventListener('click', (e) => {
         const now = Date.now(), rect = canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left);
@@ -267,6 +301,8 @@ function drawMap() {
     ctx.save();
     ctx.translate(w / 2, h / 2);
     ctx.scale(mapScale, mapScale);
+    // 加入移動偏移
+    ctx.translate(offsetX, offsetY); 
     ctx.translate(-w / 2, -h / 2);
 
     const getX = (lon) => w / 2 + (lon - (minLon + maxLon) / 2) * lonModifier * scale;
@@ -355,10 +391,9 @@ function drawMap() {
 // --- 其他功能 ---
 function handleMapSingleClick(x, y) {
     const canvas = document.getElementById('mapCanvas');
-    const rect = canvas.getBoundingClientRect();
-    // 點擊判定也需要考慮縮放
-    const realX = (x - canvas.width/2) / mapScale + canvas.width/2;
-    const realY = (y - canvas.height/2) / mapScale + canvas.height/2;
+    // 計算考慮了縮放與偏移後的真實座標
+    const realX = (x - canvas.width/2) / mapScale - offsetX + canvas.width/2;
+    const realY = (y - canvas.height/2) / mapScale - offsetY + canvas.height/2;
 
     let clickedIdx = -1;
     for (let i = 0; i < masterCenters.length; i++) {
