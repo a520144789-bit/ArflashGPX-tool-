@@ -272,24 +272,24 @@ function analyzePoints() {
 
 // --- 繪圖核心 ---
 function drawMap() {
-    const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('mapCanvas');
     if (!canvas || masterCenters.length === 0) return;
 
-    // 確保 Canvas 解析度正確
-    // --- 修正模糊：高清畫布適配 ---
-const dpr = window.devicePixelRatio || 1; // 獲取螢幕像素比 (通常為 2 或 3)
-const rect = canvas.getBoundingClientRect();
+    // 取得螢幕像素比 (通常為 2 或 3)
+    const dpr = window.devicePixelRatio || 1; 
+    const rect = canvas.getBoundingClientRect();
 
-// 設置畫布對應螢幕的物理像素大小
-canvas.width = rect.width * dpr;
-canvas.height = rect.height * dpr;
+    // 設置物理像素大小
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
 
-const ctx = canvas.getContext('2d');
-// 縮放所有繪圖操作，讓座標系統回到邏輯像素大小
-ctx.scale(dpr, dpr);
+    const ctx = canvas.getContext('2d'); // 只在這裡宣告一次 ctx
+    
+    // 縮放所有繪圖操作，讓座標系統回到邏輯像素大小
+    ctx.scale(dpr, dpr);
 
-const w = rect.width;
-const h = rect.height;
+    const w = rect.width;
+    const h = rect.height;
 // --- 結束適配 ---
 
     // 計算邊界
