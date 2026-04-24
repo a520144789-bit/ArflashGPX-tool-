@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v3.8</title>
+    <title>Suderpanda GPX v3.9</title>
     <style>
         :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
         body { font-family: system-ui, sans-serif; background: var(--bg); padding: 15px; color: #2d3436; margin: 0; }
@@ -24,6 +24,7 @@
         button { padding: 12px 2px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; color: white; transition: 0.2s; }
         button:active { transform: scale(0.95); opacity: 0.8; }
         .btn-analyze { background: var(--success); }
+        .btn-rotate { background: #e67e22; }
         .btn-copy { background: #0984e3; }
         .btn-download { background: var(--primary); }
         .btn-undo { background: #636e72; }
@@ -39,29 +40,30 @@
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX maker v3.8 🐼 </h1>
+    <h1>🐼 Suderpanda GPX maker v3.9 🐼 </h1>
     <textarea id="coordsInput" placeholder="在此貼上座標..."></textarea>
 
     <div class="stats-panel">
         <div class="stats-row">
-            <span>載入點數：<b id="pointCount">0</b></span>
+            <span>載入中心點：<b id="pointCount">0</b></span>
             <div>設定時速：<input type="number" id="speedInput" value="19" oninput="updateStats()"> km/h</div>
         </div>
         <div class="stats-row" style="border-top: 1px solid #ddd; padding-top: 5px;">
-            <span>預估距離：<b id="totalDist">0.00</b> km</span>
+            <span>預估路徑距離：<b id="totalDist">0.00</b> km</span>
             <span>預計耗時：<b id="totalTime">0</b> 分鐘</span>
         </div>
     </div>
-<div style="margin-bottom: 10px;">
-    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：</label>
-    <select id="gpxFormat" style="width: 100%; padding: 8px; border-radius: 10px; border: 2px solid #e2e8f0; font-size: 13px;">
-    <option value="arflash">ARflash (WPT)</option>
-    <option value="joystick">JoyStick (TRK)</option>
-    <option value="phantom">魅影 (WPT)</option>
-    <option value="fakegps">Fake GPS (WPT)</option>
-    <option value="ianygo">iAnyGo (TRK)</option>
-</select>
-</div>
+
+    <div style="margin-bottom: 10px;">
+        <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：</label>
+        <select id="gpxFormat" style="width: 100%; padding: 8px; border-radius: 10px; border: 2px solid #e2e8f0; font-size: 13px;">
+            <option value="arflash">ARflash (WPT)</option>
+            <option value="joystick">JoyStick (TRK)</option>
+            <option value="phantom">魅影 (WPT)</option>
+            <option value="fakegps">Fake GPS (WPT)</option>
+            <option value="ianygo">iAnyGo (TRK)</option>
+        </select>
+    </div>
     
     <div class="btn-group-2">
         <button class="btn-undo" onclick="undo()">↩️ 撤銷 (Undo)</button>
@@ -70,8 +72,8 @@
 
     <div class="btn-group">
         <button class="btn-analyze" onclick="analyzePoints()">🔍 分析排序</button>
-        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製</button>
-        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載</button>
+        <button class="btn-rotate" onclick="rotateSelected()">🔄 旋轉組別</button>
+        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
     </div>
 
     <div class="map-container"><canvas id="mapCanvas"></canvas></div>
@@ -131,13 +133,23 @@ function redo() {
     showToast("已重做");
 }
 
-// --- 排序核心邏輯 ---
+// --- 旋轉功能 ---
+function rotateSelected() {
+    if (selectedIndex === null) return showToast("請先選中一個點位進行旋轉");
+    saveState();
+    if (masterCenters[selectedIndex].rotation === undefined) masterCenters[selectedIndex].rotation = 0;
+    masterCenters[selectedIndex].rotation = (masterCenters[selectedIndex].rotation + 1) % 8;
+    renderAll(true); 
+    showToast(`已旋轉 #${selectedIndex + 1}`);
+}
+
+// --- 核心邏輯 ---
 function splitToFour(pts) {
     if (pts.length === 0) return [[],[],[],[]];
     const lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
     const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
     const midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
-    let res = [[],[],[],[]]; // 0:NE, 1:NW, 2:SW, 3:SE
+    let res = [[],[],[],[]]; 
     pts.forEach(p => {
         if (p.lat >= midLat && p.lon >= midLon) res[0].push(p);
         else if (p.lat >= midLat && p.lon < midLon) res[1].push(p);
@@ -177,7 +189,7 @@ function analyzePoints() {
         let p = line.trim().split(/[,|\s\t]+/);
         if (p.length >= 2) {
             let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
-            if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon});
+            if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon, rotation: 0});
         }
     });
     if (raw.length === 0) return;
@@ -185,11 +197,11 @@ function analyzePoints() {
 
     let bigQuads = splitToFour(raw);
     let result = [];
-    result.push(...extractSub(bigQuads[0], [3, 0, 1])); // 第一象限 Q4, Q1, Q2
-    result.push(...extractSub(bigQuads[1], [0, 1, 2])); // 第二象限 Q1, Q2, Q3
-    result.push(...extractSub(bigQuads[2], [1, 2, 3])); // 第三象限 Q2, Q3, Q4
-    result.push(...extractSub(bigQuads[3], [2, 3, 0])); // 第四象限 Q3, Q4, Q1
-    result.push(...extractSub(bigQuads[3], [1]));       // 補完剩餘
+    result.push(...extractSub(bigQuads[0], [3, 0, 1])); 
+    result.push(...extractSub(bigQuads[1], [0, 1, 2])); 
+    result.push(...extractSub(bigQuads[2], [1, 2, 3])); 
+    result.push(...extractSub(bigQuads[3], [2, 3, 0])); 
+    result.push(...extractSub(bigQuads[3], [1]));      
     result.push(...extractSub(bigQuads[2], [0]));
     result.push(...extractSub(bigQuads[1], [3]));
     result.push(...extractSub(bigQuads[0], [2]));
@@ -200,24 +212,10 @@ function analyzePoints() {
     showToast(`分析完成`);
 }
 
-// --- 計算核心 ---
 function updateStats() {
     if (masterCenters.length < 1) return;
-    let totalMeters = 0, allSteps = [];
-    const getQ = (c, t) => { let dL = t.lat-c.lat, dO = t.lon-c.lon; return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; };
-    masterCenters.forEach((center, i) => {
-        let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length-1];
-        let next = i < masterCenters.length-1 ? masterCenters[i+1] : masterCenters[0];
-        (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]).forEach(step => {
-            let lat = center.lat, lon = center.lon;
-            if (step !== "01") {
-                let r = step * Math.PI / 180;
-                lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
-                lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
-            }
-            allSteps.push({lat, lon});
-        });
-    });
+    const allSteps = getAllSteps();
+    let totalMeters = 0;
     for (let j = 0; j < allSteps.length - 1; j++) {
         const R = 6371e3, dLat = (allSteps[j+1].lat - allSteps[j].lat) * Math.PI / 180, dLon = (allSteps[j+1].lon - allSteps[j].lon) * Math.PI / 180;
         const a = Math.sin(dLat/2)**2 + Math.cos(allSteps[j].lat*Math.PI/180)*Math.cos(allSteps[j+1].lat*Math.PI/180)*Math.sin(dLon/2)**2;
@@ -228,35 +226,26 @@ function updateStats() {
     document.getElementById('totalTime').innerText = Math.round((km / speed) * 60);
 }
 
-// --- 介面管理 ---
+// --- 介面與繪圖 ---
 function handleMapSingleClick(x, y) {
     const idx = getClickedIdx(x, y);
     if (idx !== -1) {
         if (selectedIndex === null) {
             selectedIndex = idx;
-            showToast(`選中 #${idx + 1}，請點擊目標位置進行移位`);
+            showToast(`選中 #${idx + 1}，點另一點移至該處`);
         } else if (selectedIndex === idx) {
             selectedIndex = null; 
             showToast(`取消選取`);
         } else {
-            // 執行移位：將 selectedIndex 抽出並插入到 targetIdx
             const targetIdx = idx;
-            const fromName = selectedIndex + 1;
-            const toName = targetIdx + 1;
-            
-            const movedItem = masterCenters.splice(selectedIndex, 1)[0];
-            masterCenters.splice(targetIdx, 0, movedItem);
-            
-            showToast(`已將 #${fromName} 移至 #${toName} 的位置`);
+            const item = masterCenters.splice(selectedIndex, 1)[0];
+            masterCenters.splice(targetIdx, 0, item);
             selectedIndex = null;
             renderAll(); 
         }
         drawMap();
     } else {
-        if (selectedIndex !== null) {
-            selectedIndex = null;
-            drawMap();
-        }
+        if (selectedIndex !== null) { selectedIndex = null; drawMap(); }
     }
 }
 
@@ -294,25 +283,17 @@ function renderList() {
         li.className = 'sort-item' + (selectedIndex === i ? ' selected' : '');
         li.innerText = i + 1;
         li.draggable = true;
-        
         li.onclick = () => {
-            if (selectedIndex === i) {
-                selectedIndex = null;
-            } else if (selectedIndex !== null) {
-                // 將原本的 Swap 改為 Move
-                const movedItem = masterCenters.splice(selectedIndex, 1)[0];
-                masterCenters.splice(i, 0, movedItem);
-                showToast(`已移動點位至 #${i + 1}`);
+            if (selectedIndex === i) selectedIndex = null;
+            else if (selectedIndex !== null) {
+                const item = masterCenters.splice(selectedIndex, 1)[0];
+                masterCenters.splice(i, 0, item);
                 selectedIndex = null;
                 renderAll();
-                return; // 跳出避免重複觸發 renderAll(true)
-            } else { 
-                selectedIndex = i; 
-            }
+                return;
+            } else { selectedIndex = i; }
             renderAll(true); 
         };
-
-        // 拖拽部分原本就是 Move 邏輯，保持不變
         li.ondragstart = (e) => { e.dataTransfer.setData("text", i); li.style.opacity = "0.4"; };
         li.ondragover = (e) => e.preventDefault();
         li.ondrop = (e) => {
@@ -321,7 +302,6 @@ function renderList() {
             if (from !== to) {
                 const item = masterCenters.splice(from, 1)[0];
                 masterCenters.splice(to, 0, item);
-                showToast(`已移動點位`);
                 renderAll();
             }
         };
@@ -329,6 +309,74 @@ function renderList() {
         list.appendChild(li);
     });
 }
+
+function drawMap() {
+    const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1, rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr);
+    if (masterCenters.length === 0) return;
+    
+    const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons), pad = 40;
+    const getX = (lon) => pad + (maxLon === minLon ? (rect.width-pad*2)/2 : (lon - minLon) / (maxLon - minLon) * (rect.width - pad * 2));
+    const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
+    
+    ctx.clearRect(0,0,rect.width, rect.height);
+
+    const allSteps = getAllSteps();
+    if (allSteps.length > 1) {
+        ctx.beginPath(); ctx.strokeStyle = "rgba(255, 255, 255, 0.15)"; ctx.setLineDash([2, 2]);
+        allSteps.forEach((s, idx) => {
+            const x = getX(parseFloat(s.lon)), y = getY(parseFloat(s.lat));
+            if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    masterCenters.forEach((center, i) => {
+        const cx = getX(center.lon), cy = getY(center.lat);
+        const prev = i > 0 ? masterCenters[i - 1] : masterCenters[masterCenters.length - 1];
+        const next = i < masterCenters.length - 1 ? masterCenters[i + 1] : masterCenters[0];
+        const getQ = (c, t) => { let dL = t.lat-c.lat, dO = t.lon-c.lon; return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; };
+        
+        const baseRules = (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]);
+        const rot = (center.rotation || 0) * 45;
+
+        baseRules.forEach(step => {
+            if (step === "01") {
+                ctx.fillStyle = (i === selectedIndex) ? "#ffeb3b" : "rgba(108, 92, 231, 0.8)";
+                ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+            } else {
+                const r = (step + rot) * Math.PI / 180;
+                const px = cx + (10 * Math.sin(r)), py = cy - (10 * Math.cos(r));
+                ctx.fillStyle = (i === selectedIndex) ? "#ffeb3b" : "rgba(255, 255, 255, 0.4)";
+                ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+        ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.textAlign = "center"; ctx.fillText(i + 1, cx, cy - 15);
+    });
+}
+
+function getAllSteps() {
+    let allSteps = [];
+    const getQ = (c, t) => { let dL = t.lat - c.lat, dO = t.lon - c.lon; return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; };
+    masterCenters.forEach((center, i) => {
+        let prev = i > 0 ? masterCenters[i - 1] : masterCenters[masterCenters.length - 1];
+        let next = i < masterCenters.length - 1 ? masterCenters[i + 1] : masterCenters[0];
+        let baseRules = (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]);
+        let rot = (center.rotation || 0) * 45;
+        baseRules.forEach((step, sub) => {
+            let lat = center.lat, lon = center.lon;
+            if (step !== "01") {
+                let r = (step + rot) * Math.PI / 180;
+                lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
+                lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
+            }
+            allSteps.push({ lat: parseFloat(lat), lon: parseFloat(lon), name: `M${String(i + 1).padStart(2, '0')}.${sub + 1}` });
+        });
+    });
+    return allSteps;
+}
+
 function renderAll(skipSave = false) {
     if (!skipSave) saveState();
     renderList();
@@ -336,105 +384,43 @@ function renderAll(skipSave = false) {
     updateStats();
 }
 
-function drawMap() {
-    const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1, rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr);
-    if (masterCenters.length === 0) return;
-    const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons), pad = 40;
-    const getX = (lon) => pad + (maxLon === minLon ? (rect.width-pad*2)/2 : (lon - minLon) / (maxLon - minLon) * (rect.width - pad * 2));
-    const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
-    ctx.clearRect(0,0,rect.width, rect.height);
-    ctx.beginPath(); ctx.strokeStyle = "#f1c40f"; ctx.setLineDash([4,2]);
-    masterCenters.forEach((p, i) => { const x = getX(p.lon), y = getY(p.lat); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-    ctx.stroke(); ctx.setLineDash([]);
-    masterCenters.forEach((p, i) => {
-        const x = getX(p.lon), y = getY(p.lat);
-        if (i === selectedIndex) { ctx.strokeStyle = "#ffeb3b"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI*2); ctx.stroke(); }
-        ctx.fillStyle = (i === 0) ? "#2ecc71" : (i === masterCenters.length-1 ? "#e74c3c" : "#6c5ce7");
-        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = "white"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center"; ctx.fillText(i + 1, x, y - 10);
-    });
-}
-
-// 生成所有路徑點位的陣列 (供輸出使用)
-function getAllSteps() {
-    let allSteps = [];
-    const getQ = (c, t) => { 
-        let dL = t.lat - c.lat, dO = t.lon - c.lon; 
-        return (dL >= 0 && dO >= 0) ? "NE" : (dL >= 0 && dO < 0) ? "NW" : (dL < 0 && dO < 0) ? "SW" : "SE"; 
-    };
-
-    masterCenters.forEach((center, i) => {
-        let prev = i > 0 ? masterCenters[i - 1] : masterCenters[masterCenters.length - 1];
-        let next = i < masterCenters.length - 1 ? masterCenters[i + 1] : masterCenters[0];
-        (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]).forEach((step, sub) => {
-            let lat = center.lat, lon = center.lon;
-            if (step !== "01") {
-                let r = step * Math.PI / 180;
-                lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
-                lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
-            }
-            allSteps.push({ lat: lat.toFixed(6), lon: lon.toFixed(6), name: `M${String(i + 1).padStart(2, '0')}.${sub + 1}` });
-        });
-    });
-    return allSteps;
-}
-
 function buildGPXString() {
     const format = document.getElementById('gpxFormat').value;
     const steps = getAllSteps();
     const now = new Date();
     const timeStr = `${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    const startCoord = steps.length > 0 ? `(${parseFloat(steps[0].lat).toFixed(2)},${parseFloat(steps[0].lon).toFixed(2)})` : "(0,0)";
+    const startCoord = steps.length > 0 ? `(${steps[0].lat.toFixed(2)},${steps[0].lon.toFixed(2)})` : "(0,0)";
     const suffix = `${timeStr}_${startCoord}`;
 
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda GPX Tool">`;
 
-    // 軌跡類 (TRK) 格式清單
     if (format === 'joystick' || format === 'ianygo') {
         const prefix = (format === 'joystick') ? 'JoyStick' : 'iAnyGo';
         const name = `${prefix}_${suffix}`;
-        gpx += `\n  <metadata><n>${name}</n></metadata>`;
-        gpx += `\n  <trk><name>${name}</name><trkseg>`;
-        steps.forEach(p => { gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`; });
+        gpx += `\n  <metadata><n>${name}</n></metadata>\n  <trk><name>${name}</name><trkseg>`;
+        steps.forEach(p => { gpx += `\n    <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"></trkpt>`; });
         gpx += `\n  </trkseg></trk>`;
-    } 
-    // 航點類 (WPT) 格式清單
-    else {
+    } else {
         const prefix = (format === 'fakegps') ? 'FakeGPS' : (format === 'phantom') ? '魅影' : 'ARflash';
         gpx += `\n  <metadata><n>${prefix}_${suffix}</n></metadata>`;
         steps.forEach((p, idx) => {
             if (format === 'arflash') {
-                gpx += `\n<wpt lat="${p.lat}" lon="${p.lon}"><name>${p.name}</name></wpt>`;
+                gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.name}</name></wpt>`;
             } else {
-                // 魅影與 FakeGPS 共用 P1_... 命名格式
-                gpx += `\n  <wpt lat="${p.lat}" lon="${p.lon}"><n>P${idx + 1}_${suffix}</n></wpt>`;
+                gpx += `\n  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><n>P${idx + 1}_${suffix}</n></wpt>`;
             }
         });
     }
-
     return gpx + '\n</gpx>';
 }
 
-function copyFinalGPX() { navigator.clipboard.writeText(buildGPXString()).then(() => showToast("📋 已複製 GPX")); }
 function downloadFinalGPX() {
     if (masterCenters.length === 0) return;
-    const format = document.getElementById('gpxFormat').value;
     const gpxString = buildGPXString();
     const blob = new Blob([gpxString], { type: 'application/gpx+xml' });
     const a = document.createElement('a');
-    
-    const names = { 
-        'arflash': 'ARflash', 
-        'joystick': 'JoyStick', 
-        'phantom': '魅影',
-        'fakegps': 'FakeGPS',
-        'ianygo': 'iAnyGo'
-    };
-    
     a.href = URL.createObjectURL(blob);
-    a.download = `${names[format]}_${Date.now()}.gpx`;
+    a.download = `Suderpanda_${Date.now()}.gpx`;
     a.click();
 }
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
