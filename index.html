@@ -224,18 +224,19 @@ function handleMapSingleClick(x, y) {
     if (idx !== -1) {
         if (selectedIndex === null) {
             selectedIndex = idx;
-            showToast(`已選中 #${idx + 1}，請點擊目標位置進行移位`);
+            showToast(`選中 #${idx + 1}，請點擊目標位置進行移位`);
         } else if (selectedIndex === idx) {
-            selectedIndex = null;
-            drawMap();
+            selectedIndex = null; 
+            showToast(`取消選取`);
         } else {
-            // 執行移位邏輯：將 selectedIndex 移到當前點擊的 idx 位置
-            const movedItem = masterCenters.splice(selectedIndex, 1)[0];
-            masterCenters.splice(idx, 0, movedItem);
+            // --- 關鍵修改：從交換 [A,B] = [B,A] 改為 移位 ---
+            const targetIdx = idx;
+            const movedItem = masterCenters.splice(selectedIndex, 1)[0]; // 抽出被選中的點
+            masterCenters.splice(targetIdx, 0, movedItem); // 插入到新位置
             
-            showToast(`已將 #${selectedIndex + 1} 移至 #${idx + 1} 的位置`);
+            showToast(`已將 #${selectedIndex + 1} 移至 #${targetIdx + 1} 之後`);
             selectedIndex = null;
-            renderAll(); 
+            renderAll(); // 重新渲染，路徑會自動重連
         }
         drawMap();
     } else {
