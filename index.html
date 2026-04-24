@@ -69,14 +69,70 @@ const RADIUS = 36, LAT_M_PER_DEG = 111132;
 const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
 
 window.onload = () => {
-    document.getElementById('mapCanvas').addEventListener('click', (e) => {
-        const now = Date.now(), rect = e.target.getBoundingClientRect();
-        const x = e.clientX - rect.left, y = e.clientY - rect.top;
-        if (now - lastClickTime < 300) handleMapDoubleClick(x, y);
-        else handleMapSingleClick(x, y);
+    const canvas = document.getElementById('mapCanvas');
+    canvas.addEventListener('click', (e) => {
+        const now = Date.now();
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (now - lastClickTime < 300) {
+            // 觸發連點邏輯
+            handleMapDoubleClick(x, y);
+        } else {
+            // 觸發單點邏輯
+            handleMapSingleClick(x, y);
+        }
         lastClickTime = now;
     });
 };
+
+function handleMapSingleClick(x, y) {
+    const idx = getClickedIdx(x, y);
+    if (idx !== -1) {
+        if (selectedIndex === null) {
+            selectedIndex = idx;
+            showToast(`已選中 #${idx + 1}`);
+        } else if (selectedIndex === idx) {
+            selectedIndex = null; 
+            showToast(`取消選取`);
+        } else {
+            // 執行點位交換
+            [masterCenters[selectedIndex], masterCenters[idx]] = [masterCenters[idx], masterCenters[selectedIndex]];
+            showToast(`已交換 #${selectedIndex + 1} 與 #${idx + 1}`);
+            selectedIndex = null;
+            renderAll();
+        }
+        drawMap();
+    } else {
+        if (selectedIndex !== null) {
+            selectedIndex = null;
+            drawMap();
+        }
+    }
+}
+
+function handleMapDoubleClick(x, y) {
+    // 找出點擊位置附近的所有點 (判定範圍 25 像素)
+    let nearby = [];
+    for (let i = 0; i < masterCenters.length; i++) {
+        if (getDistToClick(i, x, y) < 25) {
+            nearby.push(i);
+        }
+    }
+    
+    if (nearby.length > 1) {
+        // 如果有多個點重疊，循環切換選取狀態
+        let currentInNearby = nearby.indexOf(selectedIndex);
+        if (currentInNearby === -1 || currentInNearby === nearby.length - 1) {
+            selectedIndex = nearby[0];
+        } else {
+            selectedIndex = nearby[currentInNearby + 1];
+        }
+        showToast(`多點重疊：已切換至 #${selectedIndex + 1}`);
+        drawMap();
+    }
+}
 
 // --- 排序邏輯 ---
 function splitToFour(pts) {
