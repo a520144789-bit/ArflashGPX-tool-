@@ -365,19 +365,39 @@ function drawMap() {
         const baseAngles = [45, 135, 225, 315];
         const isSelected = (i === selectedIndex);
 
-        // 繪製 4 個子點
-        ctx.beginPath();
+        // --- 修改：繪製 5 個點位的移動動線 ---
+        const subPoints = [];
         baseAngles.forEach(angle => {
             const r = (angle + rot) * Math.PI / 180;
-            const px = x + Math.sin(r) * 12; 
-            const py = y - Math.cos(r) * 12;
-            ctx.moveTo(px + 2, py);
-            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+            subPoints.push({
+                x: x + Math.sin(r) * 12, // 這裡的 12 是你原本設定的偏移量
+                y: y - Math.cos(r) * 12
+            });
         });
-        // 強化非選中點的亮度 (從 0.3 提高到 0.6)
-        ctx.fillStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.6)";
-        ctx.fill();
 
+        // 根據你想要的移動順序排列點位（例如：子1 -> 子2 -> 母點 -> 子3 -> 子4）
+        // 這樣你才能看出它如何從前一組接過來，再傳給下一組
+        const moveOrder = [subPoints[0], subPoints[1], {x, y}, subPoints[2], subPoints[3]];
+
+        ctx.beginPath();
+        ctx.setLineDash(isSelected ? [] : [2, 2]); // 選中時實線，非選中虛線
+        ctx.strokeStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.3)";
+        ctx.lineWidth = isSelected ? 2 : 1;
+
+        moveOrder.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]); // 恢復實線供後續繪製
+
+        // --- 原本的繪製子點小圓點 (保留或調整) ---
+        moveOrder.forEach(pt => {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.6)";
+            ctx.fill();
+        });
         // 繪製選中外圈
         if (isSelected) {
             ctx.beginPath();
