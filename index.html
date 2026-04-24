@@ -240,11 +240,14 @@ function drawMap() {
     const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d');
     if (!canvas || masterCenters.length === 0) return;
 
+    // 確保 Canvas 解析度正確
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
     }
     const w = canvas.width, h = canvas.height;
+
+    // 計算邊界
     const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLon = Math.min(...lons), maxLon = Math.max(...lons);
@@ -254,20 +257,21 @@ function drawMap() {
     const pad = 40;
     const scale = Math.min((w - pad * 2) / lonSpan, (h - pad * 2) / latSpan);
 
+    // 繪製背景
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#1e272e";
     ctx.fillRect(0, 0, w, h);
 
+    // --- 開始縮放與平移畫布 ---
     ctx.save();
-    // 縮放中心點
-    ctx.translate(w/2, h/2);
+    ctx.translate(w / 2, h / 2);
     ctx.scale(mapScale, mapScale);
-    ctx.translate(-w/2, -h/2);
+    ctx.translate(-w / 2, -h / 2);
 
     const getX = (lon) => w / 2 + (lon - (minLon + maxLon) / 2) * lonModifier * scale;
     const getY = (lat) => h / 2 - (lat - (minLat + maxLat) / 2) * scale;
 
-    // 連接線
+    // 1. 繪製組與組之間的連接虛線
     ctx.beginPath();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
     ctx.setLineDash([5, 5]);
@@ -278,71 +282,72 @@ function drawMap() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // --- 修正後的繪製區塊 (約第 281 行開始) ---
-masterCenters.forEach((center, i) => {
-    const x = getX(center.lon), y = getY(center.lat);
-    const isSelected = (i === selectedIndex);
-    
-    // 1. 取得動態規則 (同步 getAllSteps 的邏輯)
-    const prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
-    const next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
-    const getQ = (c, t) => { 
-        let dL = t.lat - c.lat, dO = t.lon - c.lon; 
-        return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; 
-    };
-    const baseRules = (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]);
-    const rot = (center.rotation || 0) * 45;
+    // 2. 循環繪製各組的子點與走線
+    masterCenters.forEach((center, i) => {
+        const x = getX(center.lon), y = getY(center.lat);
+        const isSelected = (i === selectedIndex);
 
-    // 2. 根據規則計算實際的繪製順序
-    const drawOrder = baseRules.map(step => {
-        if (step === "01") return { x, y };
-        const r = (step + rot) * Math.PI / 180;
-        return {
-            x: x + Math.sin(r) * 12,
-            y: y - Math.cos(r) * 12
+        // 取得 20 邏輯規則
+        const prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
+        const next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
+        const getQ = (c, t) => {
+            let dL = t.lat - c.lat, dO = t.lon - c.lon;
+            return (dL >= 0 && dO >= 0) ? "NE" : (dL >= 0 && dO < 0) ? "NW" : (dL < 0 && dO < 0) ? "SW" : "SE";
         };
-    });
+        const baseRules = (RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315]);
+        const rot = (center.rotation || 0) * 45;
 
-    // 3. 繪製連線
-    ctx.beginPath();
-    ctx.strokeStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.3)";
-    ctx.setLineDash(isSelected ? [] : [2, 2]);
-    drawOrder.forEach((pt, idx) => {
-        if (idx === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
-    });
-    ctx.stroke();
+        const drawOrder = baseRules.map(step => {
+            if (step === "01") return { x, y };
+            const r = (step + rot) * Math.PI / 180;
+            return {
+                x: x + Math.sin(r) * 12,
+                y: y - Math.cos(r) * 12
+            };
+        });
 
-    // 4. 繪製子點小圓點
-    drawOrder.forEach(pt => {
-        if (pt.x === x && pt.y === y) return; // 母點位置不重複畫小點
+        // 繪製子點走線
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.6)";
-        ctx.fill();
-    });
-
-  // 5. 繪製微型母點與偏移序號 (優化版)
-    ctx.beginPath();
-    // 半徑從 7 縮小到 3，並增加透明度 (0.6)
-    ctx.arc(x, y, 3, 0, Math.PI * 2); 
-    ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "rgba(108, 92, 231, 0.6)");
-    ctx.fill();
-
-    // 序號文字縮小並偏移 (移至右上角)，避免遮擋中心連線
-    ctx.fillStyle = "white";
-    ctx.font = "bold 9px Arial"; 
-    ctx.textAlign = "left";
-    ctx.fillText(i + 1, x + 5, y - 5); 
-
-    // 如果被選中，只畫一個細圈標示，不填滿
-    if (isSelected) {
-        ctx.beginPath();
-        ctx.arc(x, y, 10, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(253, 203, 110, 0.8)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.3)";
+        ctx.setLineDash(isSelected ? [] : [2, 2]);
+        drawOrder.forEach((pt, idx) => {
+            if (idx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+        });
         ctx.stroke();
-    }
+
+        // 繪製子點小圓點
+        drawOrder.forEach(pt => {
+            if (pt.x === x && pt.y === y) return;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.6)";
+            ctx.fill();
+        });
+
+        // 繪製中心母點 (優化版：微型化)
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "rgba(108, 92, 231, 0.6)");
+        ctx.fill();
+
+        // 序號文字 (偏移)
+        ctx.fillStyle = "white";
+        ctx.font = "bold 9px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText(i + 1, x + 5, y - 5);
+
+        // 選中狀態的外圈
+        if (isSelected) {
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(253, 203, 110, 0.8)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+    });
+
+    // --- 最後才執行一次 restore ---
     ctx.restore();
 }
 
