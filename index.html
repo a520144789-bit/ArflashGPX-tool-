@@ -135,12 +135,14 @@ function redo() {
 
 // --- 旋轉功能 ---
 function rotateSelected() {
-    if (selectedIndex === null) return showToast("請先選中一個點位進行旋轉");
+    if (selectedIndex === null) return showToast("請先選中一個點位");
     saveState();
     if (masterCenters[selectedIndex].rotation === undefined) masterCenters[selectedIndex].rotation = 0;
     masterCenters[selectedIndex].rotation = (masterCenters[selectedIndex].rotation + 1) % 8;
+    
+    const currentDeg = masterCenters[selectedIndex].rotation * 45;
     renderAll(true); 
-    showToast(`已旋轉 #${selectedIndex + 1}`);
+    showToast(`點 #${selectedIndex + 1} 旋轉至 ${currentDeg}°`);
 }
 
 // --- 核心邏輯 ---
@@ -368,20 +370,50 @@ function drawMap() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 繪製點位
-    masterCenters.forEach((p, i) => {
-        const x = getX(p.lon), y = getY(p.lat);
-        ctx.beginPath();
-        ctx.arc(x, y, 7, 0, Math.PI * 2);
-        // 選中點橘色，起點綠色，一般點紫色
-        ctx.fillStyle = (i === selectedIndex) ? "#e67e22" : (i === 0 ? "#00b894" : "#6c5ce7");
-        ctx.fill();
+masterCenters.forEach((p, i) => {
+    const x = getX(p.lon), y = getY(p.lat);
+
+    // --- 新增：繪製選中點的旋轉預覽 ---
+    if (i === selectedIndex) {
+        const rot = (p.rotation || 0) * 45;
+        // 定義基礎四個子點角度 (與你的 getAllSteps 邏輯對應)
+        const baseAngles = [45, 135, 225, 315]; 
         
-        ctx.fillStyle = "white";
-        ctx.font = "bold 11px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(i + 1, x, y - 12);
-    });
+        ctx.beginPath();
+        baseAngles.forEach(angle => {
+            const r = (angle + rot) * Math.PI / 180;
+            // 計算預覽點位置（偏移量設為 15 像素）
+            const px = x + Math.sin(r) * 15;
+            const py = y - Math.cos(r) * 15;
+            
+            // 畫預覽小圓圈
+            ctx.moveTo(px + 3, py);
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+        });
+        ctx.fillStyle = "rgba(255, 234, 167, 0.8)"; // 淺黃色預覽點
+        ctx.fill();
+
+        // 畫一個外圈高亮，讓選中感更明顯
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = "#fdcb6e";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // --- 原有的中心實體點繪製 ---
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    // 選中點橘色，起點綠色，一般點紫色
+    ctx.fillStyle = (i === selectedIndex) ? "#e67e22" : (i === 0 ? "#00b894" : "#6c5ce7");
+    ctx.fill();
+
+    // 序號文字
+    ctx.fillStyle = "white";
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(i + 1, x, y - 14); // 稍微往上調一點避免重疊
+});
 }
 function getAllSteps() {
     let allSteps = [];
