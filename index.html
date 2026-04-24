@@ -395,11 +395,25 @@ function drawMap() {
         ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "rgba(108, 92, 231, 0.6)");
         ctx.fill();
 
-        // 序號文字 (偏移至右上)
-        ctx.fillStyle = "white";
-        ctx.font = "bold 9px Arial";
-        ctx.textAlign = "left";
-        ctx.fillText(i + 1, x + 5, y - 5);
+        // --- 序號文字加上黑邊 ---
+ctx.font = "bold 10px Arial";
+ctx.textAlign = "center";
+
+const text = i + 1;
+const textX = x;
+const textY = y + 3.5;
+
+// 1. 設定黑邊寬度與顏色
+ctx.strokeStyle = "black";
+ctx.lineWidth = 3;         // 邊框粗細，可依喜好調整
+ctx.lineJoin = "round";    // 讓邊角圓滑一點
+
+// 2. 先畫邊框
+ctx.strokeText(text, textX, textY);
+
+// 3. 再填充白色文字（這樣白色才會蓋在黑邊上面）
+ctx.fillStyle = "white";
+ctx.fillText(text, textX, textY);
 
         // 選中狀態的外圈
         if (isSelected) {
