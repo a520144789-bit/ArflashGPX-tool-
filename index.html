@@ -3,48 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suderpanda GPX 座標生產器 v1.1</title>
+    <title>Suderpanda GPX 座標生產器 v2.0</title>
     <style>
-        :root { --primary: #ff4757; --secondary: #2f3542; --info: #1e90ff; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f1f2f6; margin: 0; padding: 20px; color: #2f3542; }
+        :root { --primary: #00b894; --secondary: #2d3436; --info: #0984e3; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f6fa; margin: 0; padding: 20px; color: #2f3542; }
         .card { max-width: 800px; margin: auto; background: white; padding: 35px; border-radius: 28px; box-shadow: 0 15px 50px rgba(0,0,0,0.1); }
         h1 { margin-top: 0; color: var(--primary); font-size: 24px; text-align: center; border-bottom: 2px solid #f1f2f6; padding-bottom: 20px; }
         .badge { background: var(--primary); color: white; font-size: 12px; padding: 4px 12px; border-radius: 50px; vertical-align: middle; margin-left: 10px; }
         .input-group { margin-top: 25px; }
         label { display: block; font-weight: 700; margin-bottom: 10px; font-size: 15px; color: #57606f; }
         textarea { width: 100%; height: 200px; border: 2px solid #dfe4ea; border-radius: 16px; padding: 15px; font-family: "SF Mono", "Courier New", monospace; font-size: 14px; box-sizing: border-box; transition: 0.3s; resize: vertical; }
-        textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(255, 71, 87, 0.1); }
+        textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(0, 184, 148, 0.15); }
         .config-row { display: flex; gap: 20px; margin-top: 20px; }
         .speed-input { width: 120px; padding: 12px; border: 2px solid #dfe4ea; border-radius: 12px; font-size: 16px; text-align: center; }
-        .stats-box { background: #f9f9fb; border-radius: 18px; padding: 20px; margin-top: 25px; border: 1px solid #e1e1e1; display: none; }
+        .stats-box { background: #f8efed; border-radius: 18px; padding: 20px; margin-top: 25px; border: 1px solid #e1e1e1; display: none; }
         .stats-item { font-size: 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .stats-count { color: var(--info); font-size: 14px; border-top: 1px dashed #ddd; margin-top: 10px; padding-top: 10px; }
+        .quadrant-stats { font-size: 13px; color: #636e72; background: #fff; padding: 10px 15px; border-radius: 12px; margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border: 1px solid #eee; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 30px; }
         button { padding: 18px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
         button:active { transform: scale(0.97); }
-        .btn-main { background: var(--primary); color: white; box-shadow: 0 8px 20px rgba(255, 71, 87, 0.3); }
-        .btn-copy { background: #747d8c; color: white; }
+        .btn-main { background: var(--primary); color: white; box-shadow: 0 8px 20px rgba(0, 184, 148, 0.3); }
+        .btn-main:hover { opacity: 0.9; box-shadow: 0 4px 10px rgba(0, 184, 148, 0.3); }
+        .btn-copy { background: #636e72; color: white; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX 座標生產器 <span class="badge">v1.1</span></h1>
+    <h1>🐼 Suderpanda GPX 座標生產器 <span class="badge">v2.0</span></h1>
     
     <div class="input-group">
-        <label>座標輸入 (每行一個 緯度,經度)：</label>
+        <label>座標輸入 (純點位直寫模式)：</label>
         <textarea id="coordsInput" placeholder="24.123456, 120.654321..."></textarea>
     </div>
 
     <div class="config-row">
         <div>
             <label>預計時速 (km/h)：</label>
-            <input type="number" id="speedInput" class="speed-input" value="18" step="0.1">
+            <input type="number" id="speedInput" class="speed-input" value="17" step="0.1">
         </div>
     </div>
 
     <div class="btn-group">
-        <button class="btn-main" onclick="handleGenerate('download')">💾 生成並下載 GPX</button>
+        <button class="btn-main" onclick="handleGenerate('download')">💾 生成四象限 GPX</button>
         <button class="btn-copy" onclick="handleGenerate('copy')">📋 複製 GPX 代碼</button>
     </div>
 
@@ -52,30 +54,24 @@
         <div class="stats-item"><span>📏 總行駛距離：</span><b id="distRes">0</b></div>
         <div class="stats-item"><span>⏱️ 預估總耗時：</span><b id="timeRes">0</b></div>
         
+        <div class="quadrant-stats">
+            <div>Q1 (東北)：<b id="q1Count">0</b> 點</div>
+            <div>Q2 (西北)：<b id="q2Count">0</b> 點</div>
+            <div>Q3 (西南)：<b id="q3Count">0</b> 點</div>
+            <div>Q4 (東南)：<b id="q4Count">0</b> 點</div>
+        </div>
+
         <div class="stats-count">
-            <div class="stats-item"><span>📍 當前已輸入座標：</span><b id="totalInput">0</b></div>
-            <div class="stats-item" style="color: #ff9f43;"><span>⚠️ 相同座標已排除：</span><b id="excludedCount">0</b></div>
+            <div class="stats-item"><span>📍 當前有效座標總數：</span><b id="totalInput">0</b></div>
+            <div class="stats-item" style="color: #e17055;"><span>⚠️ 重複座標已排除：</span><b id="excludedCount">0</b></div>
         </div>
         
-        <div style="font-size: 11px; color: #a4b0be; margin-top: 15px; text-align: center;">優化模式：TSP 全局最短路徑 + 動態方位銜接邏輯</div>
+        <div style="font-size: 11px; color: #b2bec3; margin-top: 15px; text-align: center;">核心邏輯：動態四邊形中心切分 + 區域定向 TSP 推進</div>
     </div>
 </div>
 
 <script>
-const RADIUS = 36;
-const LAT_M_PER_DEG = 111132;
 const EARTH_RADIUS = 6371000;
-
-const RULES = {
-    "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225],
-    "NE_NW": [45, 135, "01", 225, 315], "NE_NE": [45, 135, "01", 225, 315],
-    "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135],
-    "NW_SW": [315, 45, "01", 135, 225], "NW_NW": [315, 225, "01", 135, 45],
-    "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315],
-    "SE_NE": [135, 225, "01", 315, 45], "SE_SE": [135, 45, "01", 315, 225],
-    "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45],
-    "SW_SE": [225, 315, "01", 45, 135], "SW_SW": [225, 135, "01", 45, 315]
-};
 
 function getDistance(p1, p2) {
     const dLat = (p2.lat - p1.lat) * Math.PI / 180;
@@ -86,15 +82,6 @@ function getDistance(p1, p2) {
     return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * EARTH_RADIUS;
 }
 
-function getQuadrant(curr, target) {
-    let dLat = target.lat - curr.lat;
-    let dLon = target.lon - curr.lon;
-    if (dLat >= 0 && dLon >= 0) return "NE";
-    if (dLat >= 0 && dLon < 0)  return "NW";
-    if (dLat < 0 && dLon < 0)   return "SW";
-    return "SE";
-}
-
 window.onload = function() {
     const urlParams = new URLSearchParams(window.location.search);
     const coords = urlParams.get('data');
@@ -102,6 +89,26 @@ window.onload = function() {
         document.getElementById('coordsInput').value = decodeURIComponent(coords);
         handleGenerate('copy');
     }
+}
+
+// 區域 TSP 運算引擎
+function runTSP(points, startIdx) {
+    if (points.length === 0) return [];
+    let pool = [...points];
+    let ordered = [];
+    let current = pool.splice(startIdx, 1)[0];
+    ordered.push(current);
+    
+    while(pool.length > 0) {
+        let closestIdx = 0, minDist = Infinity;
+        for(let i = 0; i < pool.length; i++) {
+            let d = Math.hypot(pool[i].lat - current.lat, pool[i].lon - current.lon);
+            if (d < minDist) { minDist = d; closestIdx = i; }
+        }
+        current = pool.splice(closestIdx, 1)[0];
+        ordered.push(current);
+    }
+    return ordered;
 }
 
 function handleGenerate(mode) {
@@ -117,79 +124,79 @@ function handleGenerate(mode) {
         }
     });
 
-    if (raw.length === 0) return alert("請輸入座標");
+    if (raw.length === 0) return alert("請輸入有效座標");
 
-    // 統計數量
     const originalCount = raw.length;
-
-    // 剔除重複
     raw = raw.filter((point, index, self) =>
         index === self.findIndex((p) => (p.lat === point.lat && p.lon === point.lon))
     );
-
     const finalInputCount = raw.length;
     const excludedCount = originalCount - finalInputCount;
 
-    // TSP 排序
-    let centers = [];
-    let current = raw.shift();
-    centers.push(current);
-    while (raw.length > 0) {
-        let closestIdx = 0, minDist = Infinity;
-        for (let i = 0; i < raw.length; i++) {
-            let d = Math.hypot(raw[i].lat - current.lat, raw[i].lon - current.lon);
-            if (d < minDist) { minDist = d; closestIdx = i; }
-        }
-        current = raw.splice(closestIdx, 1)[0];
-        centers.push(current);
-    }
+    // 1. 抓取四個極端值與中心點
+    let minLat = Math.min(...raw.map(p => p.lat));
+    let maxLat = Math.max(...raw.map(p => p.lat));
+    let minLon = Math.min(...raw.map(p => p.lon));
+    let maxLon = Math.max(...raw.map(p => p.lon));
+    
+    let cLat = (minLat + maxLat) / 2;
+    let cLon = (minLon + maxLon) / 2;
 
-    let allPoints = [];
-    centers.forEach((center, i) => {
-        let prev = i > 0 ? centers[i-1] : centers[centers.length - 1];
-        let next = i < centers.length - 1 ? centers[i+1] : centers[0];
-        let qP = getQuadrant(center, prev);
-        let qN = getQuadrant(center, next);
-        let path = [];
-
-        if (qP === qN) {
-            if (qP === "NE") path = (prev.lon > next.lon) ? [315, 225, "01", 135, 45] : [45, 135, "01", 225, 315];
-            else if (qP === "NW") path = (prev.lon < next.lon) ? [45, 135, "01", 225, 315] : [315, 225, "01", 135, 45];
-            else if (qP === "SW") path = (prev.lon < next.lon) ? [135, 45, "01", 315, 225] : [225, 315, "01", 45, 135];
-            else if (qP === "SE") path = (prev.lon > next.lon) ? [225, 315, "01", 45, 135] : [135, 45, "01", 315, 225];
-        } else {
-            path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
-        }
-
-        path.forEach((step, subIdx) => {
-            let fLat, fLon;
-            if (step === "01") { fLat = center.lat; fLon = center.lon; }
-            else {
-                let rad = step * Math.PI / 180;
-                fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
-                fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
-            }
-            allPoints.push({ lat: fLat, lon: fLon, label: `P${i+1}.${subIdx+1}` });
-        });
+    // 2. 將座標分發至四大象限
+    let q1 = [], q2 = [], q3 = [], q4 = [];
+    raw.forEach(p => {
+        if (p.lat >= cLat && p.lon >= cLon) q1.push(p);      // 東北
+        else if (p.lat >= cLat && p.lon < cLon) q2.push(p);  // 西北
+        else if (p.lat < cLat && p.lon < cLon) q3.push(p);   // 西南
+        else q4.push(p);                                     // 東南
     });
 
+    // 3. 找出各象限的定向起點
+    let startQ1 = 0, minDQ1 = Infinity; // 最東北 (距離 maxLat, maxLon 最近)
+    q1.forEach((p, i) => {
+        let d = Math.hypot(p.lat - maxLat, p.lon - maxLon);
+        if (d < minDQ1) { minDQ1 = d; startQ1 = i; }
+    });
+
+    let startQ2 = 0, maxLonQ2 = -Infinity; // 最東邊起步
+    q2.forEach((p, i) => { if (p.lon > maxLonQ2) { maxLonQ2 = p.lon; startQ2 = i; } });
+
+    let startQ3 = 0, maxLatQ3 = -Infinity; // 最北邊起步
+    q3.forEach((p, i) => { if (p.lat > maxLatQ3) { maxLatQ3 = p.lat; startQ3 = i; } });
+
+    let startQ4 = 0, minLonQ4 = Infinity; // 最西邊起步
+    q4.forEach((p, i) => { if (p.lon < minLonQ4) { minLonQ4 = p.lon; startQ4 = i; } });
+
+    // 4. 執行區域 TSP 並合併，套用 ZXX-YY 命名規則
+    let finalPath = [];
+    
+    runTSP(q1, startQ1).forEach((p, i) => finalPath.push({ ...p, label: `Z01-${String(i+1).padStart(2, '0')}` }));
+    runTSP(q2, startQ2).forEach((p, i) => finalPath.push({ ...p, label: `Z02-${String(i+1).padStart(2, '0')}` }));
+    runTSP(q3, startQ3).forEach((p, i) => finalPath.push({ ...p, label: `Z03-${String(i+1).padStart(2, '0')}` }));
+    runTSP(q4, startQ4).forEach((p, i) => finalPath.push({ ...p, label: `Z04-${String(i+1).padStart(2, '0')}` }));
+
+    // 5. 統計與輸出
     let totalDist = 0;
-    for (let i = 0; i < allPoints.length - 1; i++) {
-        totalDist += getDistance(allPoints[i], allPoints[i+1]);
+    for (let i = 0; i < finalPath.length - 1; i++) {
+        totalDist += getDistance(finalPath[i], finalPath[i+1]);
     }
     let totalSeconds = totalDist / (speedKmH * 1000 / 3600);
     let mins = Math.floor(totalSeconds / 60);
     let secs = Math.round(totalSeconds % 60);
 
-    // 更新介面
     document.getElementById('statsBox').style.display = 'block';
     document.getElementById('distRes').innerText = totalDist.toFixed(2) + " 公尺";
     document.getElementById('timeRes').innerText = `${mins} 分 ${secs} 秒`;
     document.getElementById('totalInput').innerText = finalInputCount;
     document.getElementById('excludedCount').innerText = excludedCount;
+    
+    document.getElementById('q1Count').innerText = q1.length;
+    document.getElementById('q2Count').innerText = q2.length;
+    document.getElementById('q3Count').innerText = q3.length;
+    document.getElementById('q4Count').innerText = q4.length;
 
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-GPX-v1.1">';
-    allPoints.forEach(p => {
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-GPX-v2.0">';
+    finalPath.forEach(p => {
         gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`;
     });
     gpx += '\n</gpx>';
@@ -198,7 +205,7 @@ function handleGenerate(mode) {
         const blob = new Blob([gpx], {type: 'application/gpx+xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `Suderpanda_Route_${new Date().getTime()}.gpx`;
+        a.download = `Suderpanda_V2_${new Date().getTime()}.gpx`;
         a.click();
     } else {
         navigator.clipboard.writeText(gpx).then(() => alert("GPX 代碼已複製！"));
