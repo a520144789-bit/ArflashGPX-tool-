@@ -65,16 +65,16 @@
         </select>
     </div>
     
+    <div class="btn-group">
+        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析排序</button>
+        <button class="btn-copy" onclick="copyToClipboard()">📋 複製GPX</button>
+        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
+         <button class="btn-rotate" onclick="rotateSelected()">🔄 旋轉組別</button>
+    </div>
+
     <div class="btn-group-2">
         <button class="btn-undo" onclick="undo()">↩️ 撤銷 (Undo)</button>
         <button class="btn-redo" onclick="redo()">↪️ 重做 (Redo)</button>
-    </div>
-
-    <div class="btn-group">
-        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析排序</button>
-        <button class="btn-rotate" onclick="rotateSelected()">🔄 旋轉組別</button>
-        <button class="btn-copy" onclick="copyToClipboard()">📋 show GPX</button>
-        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
     </div>
 
     <div class="map-container"><canvas id="mapCanvas"></canvas></div>
