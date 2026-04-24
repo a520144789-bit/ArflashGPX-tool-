@@ -307,7 +307,69 @@ function drawMap() {
         ctx.fillStyle = "white"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center"; ctx.fillText(i + 1, x, y - 10);
     });
 }
+function renderList() {
+    const list = document.getElementById('sortableList');
+    if (!list) return;
+    list.innerHTML = ""; // 清空舊按鈕
 
+    masterCenters.forEach((p, i) => {
+        const li = document.createElement('li');
+        li.className = 'sort-item';
+        li.innerText = i + 1;
+        li.dataset.index = i;
+        
+        // 根據選取狀態改變外觀
+        if (selectedIndex === i) {
+            li.style.borderColor = "var(--primary)";
+            li.style.backgroundColor = "#e0e0ff";
+        }
+
+        // 1. 點擊選取：同步地圖狀態
+        li.onclick = () => {
+            if (selectedIndex === i) {
+                selectedIndex = null;
+            } else if (selectedIndex !== null) {
+                // 如果已有選取 A，點擊 B 則交換位子
+                [masterCenters[selectedIndex], masterCenters[i]] = [masterCenters[i], masterCenters[selectedIndex]];
+                selectedIndex = null;
+                showToast(`已交換編號`);
+            } else {
+                selectedIndex = i;
+            }
+            renderAll(); 
+        };
+
+        // 2. 長按/拖拽位移邏輯 (使用原生簡單位移)
+        li.draggable = true;
+        li.ondragstart = (e) => { 
+            e.dataTransfer.setData("text/plain", i);
+            li.style.opacity = "0.5";
+        };
+        li.ondragover = (e) => e.preventDefault();
+        li.ondrop = (e) => {
+            e.preventDefault();
+            const fromIdx = parseInt(e.dataTransfer.getData("text/plain"));
+            const toIdx = i;
+            if (fromIdx !== toIdx) {
+                const item = masterCenters.splice(fromIdx, 1)[0];
+                masterCenters.splice(toIdx, 0, item);
+                showToast(`移動至 #${toIdx + 1}`);
+                renderAll();
+            }
+        };
+        li.ondragend = () => { li.style.opacity = "1"; };
+
+        list.appendChild(li);
+    });
+}
+
+// --- 核心：確保 renderAll 包含所有刷新動作 ---
+function renderAll() {
+    renderList();   // 刷新下方清單
+    drawMap();      // 刷新畫布
+    updateStats();  // 刷新時速與距離
+}
+    
 function buildGPXString() {
     const getQ = (c, t) => { let dL = t.lat-c.lat, dO = t.lon-c.lon; return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; };
     let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1">';
