@@ -94,14 +94,38 @@ function getDist(p1, p2) {
 }
 
 function updateStats() {
-    if (masterCenters.length < 2) {
+    if (masterCenters.length < 1) {
         document.getElementById('totalDist').innerText = "0.00";
         document.getElementById('totalTime').innerText = "0";
         return;
     }
+
     let totalMeters = 0;
-    for (let i = 0; i < masterCenters.length - 1; i++) {
-        totalMeters += getDist(masterCenters[i], masterCenters[i+1]);
+    let allPoints = []; // 用來存儲所有細分後的點
+
+    // 模擬 20 邏輯產生所有 wpt
+    const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
+    const getQ = (c, t) => { let dLat = t.lat-c.lat, dLon = t.lon-c.lon; return (dLat>=0 && dLon>=0)?"NE":(dLat>=0 && dLon<0)?"NW":(dLat<0 && dLon<0)?"SW":"SE"; };
+
+    masterCenters.forEach((center, i) => {
+        let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length-1];
+        let next = i < masterCenters.length-1 ? masterCenters[i+1] : masterCenters[0];
+        let path = RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315];
+        
+        path.forEach((step) => {
+            let lat = center.lat, lon = center.lon;
+            if (step !== "01") {
+                let r = step * Math.PI / 180;
+                lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
+                lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
+            }
+            allPoints.push({lat, lon});
+        });
+    });
+
+    // 計算所有子點位間的總距離
+    for (let j = 0; j < allPoints.length - 1; j++) {
+        totalMeters += getDist(allPoints[j], allPoints[j+1]);
     }
     
     const speedKmH = parseFloat(document.getElementById('speedInput').value) || 1;
@@ -111,6 +135,7 @@ function updateStats() {
     document.getElementById('totalDist').innerText = totalKm.toFixed(2);
     document.getElementById('totalTime').innerText = Math.round(totalMin);
 }
+
 
 // --- 雙層象限邏輯 ---
 function splitToFour(pts) {
