@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v3.3</title>
+    <title>Suderpanda GPX v3.4</title>
     <style>
         :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
         body { font-family: system-ui, sans-serif; background: var(--bg); padding: 15px; color: #2d3436; margin: 0; }
@@ -35,7 +35,7 @@
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda v3.3 (象限排序回歸版)</h1>
+    <h1>🐼 Suderpanda v3.4 (雙層象限修正)</h1>
     <textarea id="coordsInput" placeholder="在此貼上座標..."></textarea>
 
     <div class="stats-panel">
@@ -57,11 +57,6 @@
     <div class="map-container">
         <canvas id="mapCanvas"></canvas>
     </div>
-
-    <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">
-        💡 <b>象限排序：</b>已恢復分區管理，路線會優先在局部區域跑完再跳區。<br>
-        💡 <b>交互：</b>長按(右鍵)重疊處可循環切換點位。
-    </div>
     <ul id="sortableList"></ul>
 </div>
 
@@ -81,7 +76,7 @@ window.onload = () => {
     canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); handleMapLongPress(e); });
 };
 
-// --- 分區與排序核心 ---
+// --- 修正後的雙層象限邏輯 ---
 function splitToFour(pts) {
     if (pts.length === 0) return [[],[],[],[]];
     let lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
@@ -110,50 +105,60 @@ function analyzePoints() {
 
     if (raw.length === 0) return;
     
-    // 過濾極端重合點
+    // 1. 基本去重
     raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7));
 
-    // 重新套用雙層象限邏輯
+    // 2. 第一層大象限
     let bigQ = splitToFour(raw);
-    let allSorted = [];
-    
-    // 依序提取大象限 (NE -> NW -> SW -> SE)
-    const bigOrder = [0, 1, 2, 3];
-    bigOrder.forEach(bqIdx => {
-        if (bigQ[bqIdx].length > 0) {
-            let subQ = splitToFour(bigQ[bqIdx]);
-            // 內層小象限同樣進行 TSP 排序
-            const subOrder = [0, 1, 2, 3];
-            subOrder.forEach(sqIdx => {
-                if (subQ[sqIdx].length > 0) {
-                    allSorted.push(...runTSP(subQ[sqIdx]));
-                }
+    masterCenters = [];
+
+    const runTSP = (points) => {
+        if (points.length <= 1) return [...points];
+        let pool = [...points], ordered = [pool.splice(0,1)[0]];
+        while(pool.length > 0) {
+            let best = 0, minDist = Infinity;
+            let last = ordered[ordered.length-1];
+            pool.forEach((p, i) => {
+                let d = Math.pow(p.lat - last.lat, 2) + Math.pow(p.lon - last.lon, 2);
+                if(d < minDist) { minDist = d; best = i; }
             });
+            ordered.push(pool.splice(best, 1)[0]);
+        }
+        return ordered;
+    };
+
+    // 3. 仿照原始穩定邏輯的提取順序
+    const extractSub = (quads) => {
+        let subQ = splitToFour(quads);
+        // NE 大區內部的提取順序：SW -> NW -> NE -> SE (之字型)
+        masterCenters.push(...runTSP(subQ[0])); 
+        masterCenters.push(...runTSP(subQ[1]));
+        masterCenters.push(...runTSP(subQ[2]));
+        masterCenters.push(...runTSP(subQ[3]));
+    };
+
+    // 依序處理四大區
+    [0, 1, 2, 3].forEach(idx => {
+        if (bigQ[idx].length > 0) {
+            // 這裡直接對象限內的點跑 TSP，或是更細分
+            let sub = splitToFour(bigQ[idx]);
+            // NE 區
+            if(idx === 0) { masterCenters.push(...runTSP(sub[3]), ...runTSP(sub[0]), ...runTSP(sub[1]), ...runTSP(sub[2])); }
+            // NW 區
+            else if(idx === 1) { masterCenters.push(...runTSP(sub[0]), ...runTSP(sub[1]), ...runTSP(sub[2]), ...runTSP(sub[3])); }
+            // SW 區
+            else if(idx === 2) { masterCenters.push(...runTSP(sub[1]), ...runTSP(sub[2]), ...runTSP(sub[3]), ...runTSP(sub[0])); }
+            // SE 區
+            else { masterCenters.push(...runTSP(sub[2]), ...runTSP(sub[3]), ...runTSP(sub[0]), ...runTSP(sub[1])); }
         }
     });
 
-    masterCenters = allSorted;
     document.getElementById('pointCount').innerText = masterCenters.length;
-    showToast(`排序完成：共 ${masterCenters.length} 個點`);
+    showToast(`載入完成：共 ${masterCenters.length} 點`);
     renderAll();
 }
 
-function runTSP(points) {
-    if (points.length <= 1) return [...points];
-    let pool = [...points], ordered = [pool.splice(0,1)[0]];
-    while(pool.length > 0) {
-        let best = 0, minDist = Infinity;
-        let last = ordered[ordered.length-1];
-        pool.forEach((p, i) => {
-            let d = Math.pow(p.lat - last.lat, 2) + Math.pow(p.lon - last.lon, 2);
-            if(d < minDist) { minDist = d; best = i; }
-        });
-        ordered.push(pool.splice(best, 1)[0]);
-    }
-    return ordered;
-}
-
-// --- 交互與地圖渲染 (維持 3.2 版優點) ---
+// --- 交互與繪圖功能 (維持最新版交互) ---
 function handleMapClick(e) {
     if (masterCenters.length === 0) return;
     const rect = document.getElementById('mapCanvas').getBoundingClientRect();
@@ -166,7 +171,7 @@ function handleMapClick(e) {
         } else {
             if (selectedIndex !== idx) {
                 [masterCenters[selectedIndex], masterCenters[idx]] = [masterCenters[idx], masterCenters[selectedIndex]];
-                showToast(`已交換`);
+                showToast(`交換完成`);
             }
             selectedIndex = null;
             renderAll();
@@ -183,7 +188,7 @@ function handleMapLongPress(e) {
     if (nearby.length > 1) {
         let cur = nearby.indexOf(selectedIndex);
         selectedIndex = nearby[(cur + 1) % nearby.length];
-        showToast(`切換至 #${selectedIndex + 1}`);
+        showToast(`選中 #${selectedIndex + 1}`);
         drawMap();
     }
 }
@@ -192,8 +197,8 @@ function getDistToClick(idx, cx, cy) {
     const canvas = document.getElementById('mapCanvas');
     const rect = canvas.getBoundingClientRect();
     const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
-    const pad = 40;
+    if(lats.length === 0) return 999;
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons), pad = 40;
     const getX = (lon) => pad + (maxLon === minLon ? (rect.width-pad*2)/2 : (lon - minLon) / (maxLon - minLon) * (rect.width - pad * 2));
     const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
     return Math.hypot(getX(masterCenters[idx].lon) - cx, getY(masterCenters[idx].lat) - cy);
@@ -307,7 +312,7 @@ function copyFinalGPX() { navigator.clipboard.writeText(buildGPXString()).then((
 function downloadFinalGPX() {
     const blob = new Blob([buildGPXString()], {type: 'application/gpx+xml'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_v33_${Date.now()}.gpx`; a.click();
+    a.download = `Suderpanda_v34_${Date.now()}.gpx`; a.click();
 }
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
 </script>
