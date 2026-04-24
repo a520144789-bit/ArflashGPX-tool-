@@ -3,59 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suderpanda GPX v2.2 - Pro</title>
+    <title>Suderpanda GPX v2.3 - Visual</title>
     <style>
-        :root { --primary: #6c5ce7; --accent: #fd79a8; --bg: #f0f2f5; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); padding: 20px; color: #2d3436; }
-        .card { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: var(--primary); margin-bottom: 25px; font-size: 22px; }
-        textarea { width: 100%; height: 150px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px; box-sizing: border-box; }
+        :root { --primary: #6c5ce7; --bg: #f8f9fa; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); padding: 20px; color: #2d3436; }
+        .card { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: var(--primary); font-size: 22px; }
+        textarea { width: 100%; height: 120px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px; box-sizing: border-box; font-size: 13px; }
         
-        /* 排序列表樣式 */
-        #sortableList { list-style: none; padding: 0; margin: 20px 0; display: none; }
-        .sort-item { 
-            background: #fff; border: 1px solid #ddd; margin-bottom: 8px; padding: 12px 15px; 
-            border-radius: 10px; cursor: grab; display: flex; align-items: center; justify-content: space-between;
-            transition: 0.2s;
-        }
-        .sort-item:active { cursor: grabbing; background: #f1f2f6; }
-        .sort-item .info { display: flex; align-items: center; gap: 15px; }
-        .sort-item .index { background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; }
-        .sort-item .coords { font-family: monospace; color: #636e72; font-size: 13px; }
+        /* 畫布樣式 */
+        .map-container { position: relative; width: 100%; background: #2d3436; border-radius: 16px; margin: 20px 0; overflow: hidden; height: 350px; }
+        canvas { width: 100%; height: 100%; }
+        .legend { position: absolute; top: 10; left: 10; color: white; font-size: 11px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; pointer-events: none; }
 
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        button { padding: 15px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        /* 排序列表樣式 */
+        #sortableList { list-style: none; padding: 0; margin-top: 20px; }
+        .sort-item { 
+            background: #fff; border: 1px solid #eee; margin-bottom: 6px; padding: 10px 15px; 
+            border-radius: 10px; cursor: grab; display: flex; align-items: center; justify-content: space-between;
+            font-size: 13px; transition: 0.2s;
+        }
+        .sort-item:hover { border-color: var(--primary); }
+        .sort-item .idx { background: var(--primary); color: white; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; margin-right: 10px; }
+
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        button { padding: 14px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-analyze { background: #00b894; color: white; }
-        .btn-final { background: var(--primary); color: white; display: none; }
-        .btn-copy { background: #b2bec3; color: white; }
-        
-        .stats { margin-top: 20px; font-size: 14px; color: #636e72; text-align: center; }
+        .btn-final { background: var(--primary); color: white; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX v2.2 (手動路徑干預)</h1>
+    <h1>🐼 Suderpanda GPX v2.3 (路徑視覺化預覽)</h1>
     
-    <label>1. 輸入原始座標：</label>
-    <textarea id="coordsInput" placeholder="緯度, 經度 (每行一組)"></textarea>
+    <textarea id="coordsInput" placeholder="貼上座標 (緯度, 經度) 每行一組..."></textarea>
 
     <div class="btn-group">
-        <button class="btn-analyze" onclick="analyzePoints()">🔍 第一步：分析並排序</button>
-        <button id="finalBtn" class="btn-final" onclick="generateFinalGPX('download')">🚀 第二步：導出最終路徑</button>
+        <button class="btn-analyze" onclick="analyzePoints()">🔍 分析並生成預覽</button>
+        <button class="btn-final" onclick="generateFinalGPX()">🚀 下載最終 GPX</button>
+    </div>
+
+    <div class="map-container">
+        <div class="legend">起點：🟢 | 終點：🔴 | 方向：黃線</div>
+        <canvas id="mapCanvas"></canvas>
     </div>
 
     <ul id="sortableList"></ul>
-
-    <div id="stats" class="stats"></div>
 </div>
 
 <script>
-let masterCenters = []; // 存放大點數據
+let masterCenters = [];
 const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 
-// 分析輸入並進行初始四象限排序
 function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value;
     let raw = [];
@@ -68,11 +69,9 @@ function analyzePoints() {
     });
 
     if (raw.length === 0) return alert("請輸入座標");
+    raw = raw.filter((p, i, self) => i === self.findIndex(t => t.lat === p.lat && t.lon === p.lon));
 
-    // 去重
-    raw = raw.filter((point, index, self) => index === self.findIndex((p) => (p.lat === point.lat && p.lon === point.lon)));
-
-    // 初始四象限邏輯 (同 v2.1)
+    // 初始四象限排序
     let minLat = Math.min(...raw.map(p => p.lat)), maxLat = Math.max(...raw.map(p => p.lat));
     let minLon = Math.min(...raw.map(p => p.lon)), maxLon = Math.max(...raw.map(p => p.lon));
     let cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
@@ -86,132 +85,142 @@ function analyzePoints() {
     });
 
     masterCenters = [];
-    // Q1-Q4 初始排序
     masterCenters.push(...runTSP(q[0], 0));
     masterCenters.push(...runTSP(q[1], 0));
     masterCenters.push(...runTSP(q[2], 0));
     masterCenters.push(...runTSP(q[3], 0));
 
+    renderAll();
+    copyToClipboard(generateGPXText()); // 自動複製初步結果
+}
+
+function renderAll() {
     renderSortableList();
+    drawMap();
+}
+
+function drawMap() {
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    if (masterCenters.length === 0) return;
+
+    // 計算縮放範圍
+    const lats = masterCenters.map(p => p.lat);
+    const lons = masterCenters.map(p => p.lon);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+    const padding = 40;
+    const w = canvas.offsetWidth - padding * 2;
+    const h = canvas.offsetHeight - padding * 2;
+
+    const getX = (lon) => padding + (maxLon === minLon ? w/2 : (lon - minLon) / (maxLon - minLon) * w);
+    const getY = (lat) => padding + (maxLat === minLat ? h/2 : (maxLat - lat) / (maxLat - minLat) * h);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 繪製路徑線
+    ctx.beginPath();
+    ctx.strokeStyle = "#f1c40f";
+    ctx.lineWidth = 2;
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // 繪製點位
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        ctx.fillStyle = (i === 0) ? "#2ecc71" : (i === masterCenters.length - 1 ? "#e74c3c" : "#fff");
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+    });
 }
 
 function renderSortableList() {
     const list = document.getElementById('sortableList');
     list.innerHTML = "";
-    list.style.display = "block";
-    document.getElementById('finalBtn').style.display = "block";
-
     masterCenters.forEach((p, i) => {
         const li = document.createElement('li');
         li.className = 'sort-item';
         li.draggable = true;
-        li.dataset.index = i;
-        li.innerHTML = `
-            <div class="info">
-                <span class="index">${i + 1}</span>
-                <span class="coords">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</span>
-            </div>
-            <span style="color:#ccc">⠿</span>
-        `;
-        
-        // 拖拽事件實作
-        li.addEventListener('dragstart', handleDragStart);
-        li.addEventListener('dragover', handleDragOver);
-        li.addEventListener('drop', handleDrop);
+        li.innerHTML = `<div><span class="idx">${i+1}</span>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div><span>⠿</span>`;
+        li.onsort = i;
+        li.addEventListener('dragstart', (e) => { dragIdx = i; });
+        li.addEventListener('dragover', (e) => e.preventDefault());
+        li.addEventListener('drop', (e) => {
+            const [item] = masterCenters.splice(dragIdx, 1);
+            masterCenters.splice(i, 0, item);
+            renderAll();
+        });
         list.appendChild(li);
     });
 }
-
-// 拖拽邏輯
-let dragSrcEl = null;
-function handleDragStart(e) { dragSrcEl = this; e.dataTransfer.effectAllowed = 'move'; }
-function handleDragOver(e) { e.preventDefault(); return false; }
-function handleDrop(e) {
-    e.stopPropagation();
-    if (dragSrcEl !== this) {
-        const list = document.getElementById('sortableList');
-        const allItems = Array.from(list.querySelectorAll('.sort-item'));
-        const fromIdx = allItems.indexOf(dragSrcEl);
-        const toIdx = allItems.indexOf(this);
-        
-        // 更新數據陣列
-        const [movedItem] = masterCenters.splice(fromIdx, 1);
-        masterCenters.splice(toIdx, 0, movedItem);
-        
-        renderSortableList(); // 重新渲染確保編號更新
-    }
-    return false;
-}
+let dragIdx = null;
 
 function runTSP(points, startIdx) {
     if (points.length === 0) return [];
-    let pool = [...points];
-    let ordered = [];
-    let current = pool.splice(startIdx, 1)[0];
+    let pool = [...points], ordered = [], current = pool.splice(startIdx, 1)[0];
     ordered.push(current);
     while(pool.length > 0) {
-        let closestIdx = 0, minDist = Infinity;
-        for(let i = 0; i < pool.length; i++) {
-            let d = Math.hypot(pool[i].lat - current.lat, pool[i].lon - current.lon);
-            if (d < minDist) { minDist = d; closestIdx = i; }
-        }
-        current = pool.splice(closestIdx, 1)[0];
+        let cIdx = 0, minDist = Infinity;
+        pool.forEach((p, i) => {
+            let d = Math.hypot(p.lat - current.lat, p.lon - current.lon);
+            if(d < minDist) { minDist = d; cIdx = i; }
+        });
+        current = pool.splice(cIdx, 1)[0];
         ordered.push(current);
     }
     return ordered;
 }
 
-function generateFinalGPX(mode) {
-    // 這裡會抓取「當前排序後」的 masterCenters 重新跑 20 條邏輯
-    let finalPoints = [];
-    const RULES = {
-        "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225],
-        "NE_NW": [45, 135, "01", 225, 315], "NE_NE": [45, 135, "01", 225, 315],
-        "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135],
-        "NW_SW": [315, 45, "01", 135, 225], "NW_NW": [315, 225, "01", 135, 45],
-        "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315],
-        "SE_NE": [135, 225, "01", 315, 45], "SE_SE": [135, 45, "01", 315, 225],
-        "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45],
-        "SW_SE": [225, 315, "01", 45, 135], "SW_SW": [225, 135, "01", 45, 315]
-    };
-
-    function getQuadrant(curr, target) {
-        let dLat = target.lat - curr.lat, dLon = target.lon - curr.lon;
-        if (dLat >= 0 && dLon >= 0) return "NE";
-        if (dLat >= 0 && dLon < 0)  return "NW";
-        if (dLat < 0 && dLon < 0)   return "SW";
-        return "SE";
-    }
-
+function generateGPXText() {
+    // 包含 20 條子點邏輯的內部生成
+    const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NE_NE": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "NW_NW": [315, 225, "01", 135, 45], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SE_SE": [135, 45, "01", 315, 225], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135], "SW_SW": [225, 135, "01", 45, 315] };
+    const getQ = (c, t) => { let dLat = t.lat-c.lat, dLon = t.lon-c.lon; return (dLat>=0 && dLon>=0)?"NE":(dLat>=0 && dLon<0)?"NW":(dLat<0 && dLon<0)?"SW":"SE"; };
+    
+    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1">';
     masterCenters.forEach((center, i) => {
-        let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length - 1];
-        let next = i < masterCenters.length - 1 ? masterCenters[i+1] : masterCenters[0];
-        let qP = getQuadrant(center, prev), qN = getQuadrant(center, next);
-        let path = RULES[`${qP}_${qN}`] || [45, 135, "01", 225, 315];
-
-        path.forEach((step, subIdx) => {
-            let fLat, fLon;
-            if (step === "01") { fLat = center.lat; fLon = center.lon; }
-            else {
-                let rad = step * Math.PI / 180;
-                fLat = center.lat + (RADIUS * Math.cos(rad) / LAT_M_PER_DEG);
-                fLon = center.lon + (RADIUS * Math.sin(rad) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
+        let prev = i > 0 ? masterCenters[i-1] : masterCenters[masterCenters.length-1];
+        let next = i < masterCenters.length-1 ? masterCenters[i+1] : masterCenters[0];
+        let path = RULES[`${getQ(center, prev)}_${getQ(center, next)}`] || [45, 135, "01", 225, 315];
+        path.forEach((step, sub) => {
+            let lat = center.lat, lon = center.lon;
+            if (step !== "01") {
+                let r = step * Math.PI / 180;
+                lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
+                lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)));
             }
-            finalPoints.push({ lat: fLat, lon: fLon, label: `M${String(i+1).padStart(2,'0')}.${subIdx+1}` });
+            gpx += `\n<wpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><name>M${i+1}.${sub+1}</name></wpt>`;
         });
     });
+    return gpx + '\n</gpx>';
+}
 
-    // 輸出 GPX
-    let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Suderpanda-Pro-Manual">';
-    finalPoints.forEach(p => { gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${p.label}</name></wpt>`; });
-    gpx += '\n</gpx>';
-
-    const blob = new Blob([gpx], {type: 'application/gpx+xml'});
+function generateFinalGPX() {
+    const text = generateGPXText();
+    const blob = new Blob([text], {type: 'application/gpx+xml'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_Custom_${new Date().getTime()}.gpx`;
+    a.download = `Suderpanda_V23_${new Date().getTime()}.gpx`;
     a.click();
-    alert("自定義路徑 GPX 已導出！");
+}
+
+function copyToClipboard(text) {
+    const el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    console.log("GPX Auto-copied");
 }
 </script>
 </body>
