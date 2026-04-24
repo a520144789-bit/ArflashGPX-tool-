@@ -119,6 +119,22 @@ window.onload = () => {
         }
     });
 
+    // 滑鼠滾輪縮放
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault(); // 防止網頁跟著捲動
+        
+        const zoomSpeed = 0.001;
+        const delta = -e.deltaY; // 向上滾是正值，向下是負值
+        
+        // 計算新的縮放值
+        let newScale = mapScale + delta * zoomSpeed;
+        
+        // 限制縮放範圍在 0.5 到 8 倍之間
+        mapScale = Math.min(Math.max(newScale, 0.5), 8);
+        
+        drawMap();
+    }, { passive: false });
+    
     canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
         if (e.touches.length === 2) {
