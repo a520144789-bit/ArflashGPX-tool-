@@ -195,39 +195,32 @@ function analyzePoints() {
         }
     });
     if (raw.length === 0) return;
+    
+    // 去重
     raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7));
 
     let bigQuads = splitToFour(raw);
     let result = [];
-    result.push(...extractSub(bigQuads[0], [3, 0, 1])); 
-    result.push(...extractSub(bigQuads[1], [0, 1, 2])); 
-    result.push(...extractSub(bigQuads[2], [1, 2, 3])); 
-    result.push(...extractSub(bigQuads[3], [2, 3, 0])); 
-    result.push(...extractSub(bigQuads[3], [1]));      
-    result.push(...extractSub(bigQuads[2], [0]));
-    result.push(...extractSub(bigQuads[1], [3]));
-    result.push(...extractSub(bigQuads[0], [2]));
+    
+    // 執行原有的象限分析
+    try {
+        result.push(...extractSub(bigQuads[0], [3, 0, 1])); 
+        result.push(...extractSub(bigQuads[1], [0, 1, 2])); 
+        result.push(...extractSub(bigQuads[2], [1, 2, 3])); 
+        result.push(...extractSub(bigQuads[3], [2, 3, 0])); 
+        result.push(...extractSub(bigQuads[3], [1]));      
+        result.push(...extractSub(bigQuads[2], [0]));
+        result.push(...extractSub(bigQuads[1], [3]));
+        result.push(...extractSub(bigQuads[0], [2]));
+    } catch(e) { console.log("分析過程異常"); }
 
-    masterCenters = result;
+    // --- 重要修正：如果分析結果為空，則直接使用原始座標 ---
+    masterCenters = result.length > 0 ? result : raw;
+    
     document.getElementById('pointCount').innerText = masterCenters.length;
     renderAll();
-    showToast(`分析完成`);
+    showToast(result.length > 0 ? "分析完成" : "載入原始點位");
 }
-
-function updateStats() {
-    if (masterCenters.length < 1) return;
-    const allSteps = getAllSteps();
-    let totalMeters = 0;
-    for (let j = 0; j < allSteps.length - 1; j++) {
-        const R = 6371e3, dLat = (allSteps[j+1].lat - allSteps[j].lat) * Math.PI / 180, dLon = (allSteps[j+1].lon - allSteps[j].lon) * Math.PI / 180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(allSteps[j].lat*Math.PI/180)*Math.cos(allSteps[j+1].lat*Math.PI/180)*Math.sin(dLon/2)**2;
-        totalMeters += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-    const km = totalMeters / 1000, speed = parseFloat(document.getElementById('speedInput').value) || 1;
-    document.getElementById('totalDist').innerText = km.toFixed(2);
-    document.getElementById('totalTime').innerText = Math.round((km / speed) * 60);
-}
-
 // --- 介面與繪圖 ---
 function handleMapSingleClick(x, y) {
     const idx = getClickedIdx(x, y);
@@ -328,13 +321,11 @@ function renderList() {
 function drawMap() {
     const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d');
     if (!canvas || masterCenters.length === 0) {
-        // 如果沒數據，清空畫布回深色背景
         ctx.fillStyle = "#1e272e";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         return;
     }
 
-    // 重要：確保 Canvas 繪圖解析度正確
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
     const w = canvas.width, h = canvas.height;
@@ -343,24 +334,21 @@ function drawMap() {
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLon = Math.min(...lons), maxLon = Math.max(...lons);
     
-    // 計算比例尺與修正量
     const latSpan = (maxLat - minLat) || 0.0001;
     const lonModifier = Math.cos(lats[0] * Math.PI / 180);
     const lonSpan = ((maxLon - minLon) * lonModifier) || 0.0001;
     
     const pad = 40;
     const scale = Math.min((w - pad * 2) / lonSpan, (h - pad * 2) / latSpan);
-
     const getX = (lon) => w / 2 + (lon - (minLon + maxLon) / 2) * lonModifier * scale;
     const getY = (lat) => h / 2 - (lat - (minLat + maxLat) / 2) * scale;
 
-    // --- 開始繪圖 ---
     ctx.fillStyle = "#1e272e";
     ctx.fillRect(0, 0, w, h);
 
-    // 繪製路徑
+    // 繪製中心連接路徑
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
     ctx.setLineDash([5, 5]);
     masterCenters.forEach((p, i) => {
         const x = getX(p.lon), y = getY(p.lat);
@@ -370,52 +358,47 @@ function drawMap() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-// --- 繪製所有點位的子點與銜接路徑 ---
-// --- 繪製所有點位的子點與銜接路徑 ---
-masterCenters.forEach((p, i) => {
-    const x = getX(p.lon), y = getY(p.lat);
-    const rot = (p.rotation || 0) * 45;
-    const baseAngles = [45, 135, 225, 315]; // 四個角的小點
-    
-    // 1. 繪製該組內的五個點位（4個子點 + 1個中心點）
-    const isSelected = (i === selectedIndex);
-    ctx.beginPath();
-    
-    // 子點位置計算與繪製
-    baseAngles.forEach(angle => {
-        const r = (angle + rot) * Math.PI / 180;
-        const px = x + Math.sin(r) * 12; // 縮小一點偏移量，畫面較精緻
-        const py = y - Math.cos(r) * 12;
-        
-        ctx.moveTo(px + 2, py);
-        ctx.arc(px, py, 2, 0, Math.PI * 2);
-    });
-    
-    // 設定顏色：選中的點組用亮黃色，其餘用半透明灰色
-    ctx.fillStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.3)";
-    ctx.fill();
+    // 繪製各組樣態
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        const rot = (p.rotation || 0) * 45;
+        const baseAngles = [45, 135, 225, 315];
+        const isSelected = (i === selectedIndex);
 
-    // 2. 如果是選中點，加一個明顯的外圈
-    if (isSelected) {
+        // 繪製 4 個子點
         ctx.beginPath();
-        ctx.arc(x, y, 15, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(253, 203, 110, 0.5)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-    }
+        baseAngles.forEach(angle => {
+            const r = (angle + rot) * Math.PI / 180;
+            const px = x + Math.sin(r) * 12; 
+            const py = y - Math.cos(r) * 12;
+            ctx.moveTo(px + 2, py);
+            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        });
+        // 強化非選中點的亮度 (從 0.3 提高到 0.6)
+        ctx.fillStyle = isSelected ? "#fdcb6e" : "rgba(255, 255, 255, 0.6)";
+        ctx.fill();
 
-    // 3. 繪製中心母點（維持原樣，方便辨識序號）
-    ctx.beginPath();
-    ctx.arc(x, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "#6c5ce7");
-    ctx.fill();
+        // 繪製選中外圈
+        if (isSelected) {
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(253, 203, 110, 0.8)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
 
-    // 4. 序號文字
-    ctx.fillStyle = "white";
-    ctx.font = "bold 10px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(i + 1, x, y + 3); // 序號放中心
-});
+        // 繪製中心母點
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? "#e67e22" : (i === 0 ? "#00b894" : "#6c5ce7");
+        ctx.fill();
+
+        // 序號文字
+        ctx.fillStyle = "white";
+        ctx.font = "bold 10px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(i + 1, x, y + 3.5);
+    });
 }
 function getAllSteps() {
     let allSteps = [];
