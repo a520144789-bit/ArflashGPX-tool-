@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v2.7</title>
+    <title>Suderpanda GPX v2.8</title>
     <style>
         :root { --primary: #6c5ce7; --success: #00b894; --bg: #f8f9fa; }
         body { font-family: system-ui, sans-serif; background: var(--bg); padding: 15px; color: #2d3436; margin: 0; }
@@ -11,7 +11,17 @@
         h1 { text-align: center; color: var(--primary); font-size: 18px; margin-bottom: 12px; }
         textarea { width: 100%; height: 60px; border: 2px solid #e2e8f0; border-radius: 12px; padding: 8px; box-sizing: border-box; font-size: 12px; margin-bottom: 10px; }
         
-        .map-container { position: relative; width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 15px; height: 320px; overflow: hidden; border: 1px solid #dcdde1; }
+        /* 統計資訊顯示區 */
+        .stats-panel { 
+            background: #f1f2f6; padding: 12px; border-radius: 15px; 
+            margin-bottom: 15px; display: flex; flex-direction: column; gap: 5px;
+        }
+        .stats-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .stats-row b { color: var(--primary); font-size: 16px; }
+        .speed-input-wrap { display: flex; align-items: center; gap: 5px; }
+        #speedInput { width: 50px; padding: 5px; border: 2px solid var(--primary); border-radius: 8px; text-align: center; font-weight: bold; }
+
+        .map-container { width: 100%; background: #1e272e; border-radius: 16px; margin-bottom: 15px; height: 320px; overflow: hidden; border: 1px solid #dcdde1; }
         canvas { width: 100%; height: 100%; display: block; }
         
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; }
@@ -20,19 +30,12 @@
         .btn-copy { background: #0984e3; }
         .btn-download { background: var(--primary); }
 
-        /* 網格化排序清單 */
-        #sortableList { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); 
-            gap: 10px; 
-            padding: 0; 
-            margin: 0; 
-        }
+        #sortableList { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 10px; padding: 0; margin: 0; }
         .sort-item { 
             background: #fff; border: 2px solid #eee; height: 50px; border-radius: 12px; 
             display: flex; align-items: center; justify-content: center; 
             font-size: 16px; font-weight: bold; color: var(--primary);
-            touch-action: none; user-select: none; position: relative;
+            touch-action: none; user-select: none;
         }
         .sort-item.dragging { background: #e0e0ff; border-color: var(--primary); transform: scale(1.1); z-index: 100; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         
@@ -42,20 +45,32 @@
 <body>
 
 <div class="card">
-    <h1>🐼 GPX v2.7 (雙層象限20邏輯閘版)</h1>
+    <h1>🐼 GPX v2.8 (含時速計算)</h1>
     <textarea id="coordsInput" placeholder="貼上座標..."></textarea>
+
+    <div class="stats-panel">
+        <div class="stats-row">
+            <span>預估總距離：<b id="totalDist">0.00</b> km</span>
+            <div class="speed-input-wrap">
+                時速：<input type="number" id="speedInput" value="15" oninput="updateStats()"> km/h
+            </div>
+        </div>
+        <div class="stats-row">
+            <span>預估總耗時：<b id="totalTime">0</b> 分鐘</span>
+        </div>
+    </div>
 
     <div class="btn-group">
         <button class="btn-analyze" onclick="analyzePoints()">🔍 分析排序</button>
-        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製內容</button>
-        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
+        <button class="btn-copy" onclick="copyFinalGPX()">📋 複製</button>
+        <button class="btn-download" onclick="downloadFinalGPX()">💾 下載</button>
     </div>
 
     <div class="map-container">
         <canvas id="mapCanvas"></canvas>
     </div>
 
-    <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">👇 <b>長按編號</b>可拖曳排序（1 🟢 ➜ 末 🔴）：</div>
+    <div style="font-size: 12px; color: #636e72; margin-bottom: 10px;">👇 <b>長按編號</b> 調整順序：</div>
     <ul id="sortableList"></ul>
 </div>
 
@@ -67,7 +82,37 @@ let dragEl = null;
 const RADIUS = 36;
 const LAT_M_PER_DEG = 111132;
 
-// --- 雙層象限核心邏輯 ---
+// --- 距離計算 (Haversine) ---
+function getDist(p1, p2) {
+    const R = 6371e3;
+    const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+    const dLon = (p2.lon - p1.lon) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function updateStats() {
+    if (masterCenters.length < 2) {
+        document.getElementById('totalDist').innerText = "0.00";
+        document.getElementById('totalTime').innerText = "0";
+        return;
+    }
+    let totalMeters = 0;
+    for (let i = 0; i < masterCenters.length - 1; i++) {
+        totalMeters += getDist(masterCenters[i], masterCenters[i+1]);
+    }
+    
+    const speedKmH = parseFloat(document.getElementById('speedInput').value) || 1;
+    const totalKm = totalMeters / 1000;
+    const totalMin = (totalKm / speedKmH) * 60;
+
+    document.getElementById('totalDist').innerText = totalKm.toFixed(2);
+    document.getElementById('totalTime').innerText = Math.round(totalMin);
+}
+
+// --- 雙層象限邏輯 ---
 function splitToFour(pts) {
     if (pts.length === 0) return [[],[],[],[]];
     let lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
@@ -75,10 +120,10 @@ function splitToFour(pts) {
     let midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
     let res = [[],[],[],[]];
     pts.forEach(p => {
-        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p); // Q1(NE)
-        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p); // Q2(NW)
-        else if (p.lat < midLat && p.lon < midLon) res[2].push(p); // Q3(SW)
-        else res[3].push(p); // Q4(SE)
+        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p);
+        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p);
+        else if (p.lat < midLat && p.lon < midLon) res[2].push(p);
+        else res[3].push(p);
     });
     return res;
 }
@@ -87,7 +132,6 @@ function extractOrdered(quads, orderArray) {
     let result = [];
     orderArray.forEach(idx => {
         if (quads[idx] && quads[idx].length > 0) {
-            // 在每一最小單位內執行 TSP 以確保局部最短
             result.push(...runTSP(quads[idx], 0));
         }
     });
@@ -107,31 +151,21 @@ function analyzePoints() {
     if (raw.length === 0) return;
     raw = raw.filter((p, i, self) => i === self.findIndex(t => t.lat === p.lat && t.lon === p.lon));
 
-    // 1. 第一層切分 (大象限)
     let BigQ = splitToFour(raw);
-    
-    // 2. 第二層切分 (小象限)
     let subQ = BigQ.map(q => splitToFour(q));
 
     masterCenters = [];
-    // 執行你指定的自定義順序：
-    // Q1 ➜ 4,1,2
     masterCenters.push(...extractOrdered(subQ[0], [3, 0, 1]));
-    // Q2 ➜ 1,2,3
     masterCenters.push(...extractOrdered(subQ[1], [0, 1, 2]));
-    // Q3 ➜ 2,3,4
     masterCenters.push(...extractOrdered(subQ[2], [1, 2, 3]));
-    // Q4 ➜ 3,4,1
     masterCenters.push(...extractOrdered(subQ[3], [2, 3, 0]));
-    
-    // 補齊剩餘順序：Q4.2 ➜ Q3.1 ➜ Q2.4 ➜ Q1.3
     masterCenters.push(...extractOrdered(subQ[3], [1]));
     masterCenters.push(...extractOrdered(subQ[2], [0]));
     masterCenters.push(...extractOrdered(subQ[1], [3]));
     masterCenters.push(...extractOrdered(subQ[0], [2]));
 
     renderAll();
-    showToast("🔍 雙層象限排序完成");
+    showToast("🔍 已重新分析排序");
 }
 
 function runTSP(points, startIdx) {
@@ -150,7 +184,13 @@ function runTSP(points, startIdx) {
     return ordered;
 }
 
-// --- 手機網格拖拽介面 ---
+// --- 介面渲染與拖放 ---
+function renderAll() {
+    renderSortableList();
+    drawMap();
+    updateStats();
+}
+
 function renderSortableList() {
     const list = document.getElementById('sortableList');
     list.innerHTML = "";
@@ -166,11 +206,7 @@ function renderSortableList() {
     });
 }
 
-function handleTouchStart(e) {
-    dragEl = e.currentTarget;
-    dragEl.classList.add('dragging');
-}
-
+function handleTouchStart(e) { dragEl = e.currentTarget; dragEl.classList.add('dragging'); }
 function handleTouchMove(e) {
     e.preventDefault();
     const touch = e.touches[0];
@@ -184,7 +220,6 @@ function handleTouchMove(e) {
         container.insertBefore(dragEl, next ? closest.nextSibling : closest);
     }
 }
-
 function handleTouchEnd() {
     if (!dragEl) return;
     dragEl.classList.remove('dragging');
@@ -193,9 +228,6 @@ function handleTouchEnd() {
     dragEl = null;
     renderAll();
 }
-
-// --- 繪圖與導出 ---
-function renderAll() { renderSortableList(); drawMap(); }
 
 function drawMap() {
     const canvas = document.getElementById('mapCanvas');
@@ -259,7 +291,7 @@ function downloadFinalGPX() {
     if (masterCenters.length === 0) return;
     const blob = new Blob([buildGPX()], {type: 'application/gpx+xml'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Suderpanda_v27_${Date.now()}.gpx`; a.click();
+    a.download = `Suderpanda_v28_${Date.now()}.gpx`; a.click();
 }
 
 function showToast(msg) {
