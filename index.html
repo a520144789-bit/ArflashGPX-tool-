@@ -73,6 +73,7 @@
     <div class="btn-group">
         <button class="btn-analyze" onclick="analyzePoints()">🔍 分析排序</button>
         <button class="btn-rotate" onclick="rotateSelected()">🔄 旋轉組別</button>
+        <button class="btn-copy" onclick="copyToClipboard()">📋 show GPX</button>
         <button class="btn-download" onclick="downloadFinalGPX()">💾 下載檔案</button>
     </div>
 
@@ -486,6 +487,27 @@ function downloadFinalGPX() {
     a.href = URL.createObjectURL(blob);
     a.download = `Suderpanda_${Date.now()}.gpx`;
     a.click();
+}
+    // --- 補回複製功能 ---
+function copyToClipboard() {
+    if (masterCenters.length === 0) return showToast("沒有資料可複製");
+    
+    const gpxString = buildGPXString();
+    
+    // 使用現代瀏覽器 API 進行複製
+    navigator.clipboard.writeText(gpxString).then(() => {
+        showToast("✅ 已複製 GPX 到剪貼簿");
+    }).catch(err => {
+        console.error('無法複製: ', err);
+        // 備用方案：如果瀏覽器不支援 clipboard API
+        const el = document.createElement('textarea');
+        el.value = gpxString;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        showToast("✅ 已複製 (備用方案)");
+    });
 }
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
 </script>
