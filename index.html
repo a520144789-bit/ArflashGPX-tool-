@@ -272,22 +272,28 @@ function drawMap() {
     const getX = (lon) => w / 2 + (lon - (minLon + maxLon) / 2) * lonModifier * scale;
     const getY = (lat) => h / 2 - (lat - (minLat + maxLat) / 2) * scale;
 
-    // 1. 繪製組與組之間的連接虛線
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
-    ctx.setLineDash([5, 5]);
-    masterCenters.forEach((p, i) => {
-        const x = getX(p.lon), y = getY(p.lat);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
+   // 1. 繪製組與組之間的連接紅色實線
+ctx.beginPath();
+ctx.strokeStyle = "#ff4757"; // 紅色
+ctx.lineWidth = 1.5;         // 稍微加粗
+ctx.setLineDash([]);         // 確保是實線
+masterCenters.forEach((p, i) => {
+    const x = getX(p.lon), y = getY(p.lat);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+});
+ctx.stroke();
 
-    // 2. 循環繪製各組的子點與走線
-    masterCenters.forEach((center, i) => {
-        const x = getX(center.lon), y = getY(center.lat);
-        const isSelected = (i === selectedIndex);
-
+// 繪製子點走線 (黃色實線)
+ctx.beginPath();
+// 選中時用亮黃色 (#f1c40f)，非選中用深黃色 (rgba(241, 196, 15, 0.5))
+ctx.strokeStyle = isSelected ? "#f1c40f" : "rgba(241, 196, 15, 0.6)";
+ctx.lineWidth = isSelected ? 2 : 1; 
+ctx.setLineDash([]); // 確保是實線
+drawOrder.forEach((pt, idx) => {
+    if (idx === 0) ctx.moveTo(pt.x, pt.y);
+    else ctx.lineTo(pt.x, pt.y);
+});
+ctx.stroke();
         // 取得 20 邏輯規則
         const prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
         const next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
