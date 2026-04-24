@@ -261,13 +261,26 @@ function handleMapDoubleClick(x, y) {
 }
 
 function getDistToClick(idx, cx, cy) {
-    const canvas = document.getElementById('mapCanvas'), rect = canvas.getBoundingClientRect();
+    const canvas = document.getElementById('mapCanvas');
+    const w = canvas.width, h = canvas.height;
+    
     const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
     if(lats.length === 0) return 999;
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons), pad = 40;
-    const getX = (lon) => pad + (maxLon === minLon ? (rect.width-pad*2)/2 : (lon - minLon) / (maxLon - minLon) * (rect.width - pad * 2));
-    const getY = (lat) => pad + (maxLat === minLat ? (rect.height-pad*2)/2 : (maxLat - lat) / (maxLat - minLat) * (rect.height - pad * 2));
-    return Math.hypot(getX(masterCenters[idx].lon) - cx, getY(masterCenters[idx].lat) - cy);
+    
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+    
+    const latSpan = (maxLat - minLat) || 0.0001;
+    const lonModifier = Math.cos(lats[0] * Math.PI / 180);
+    const lonSpan = ((maxLon - minLon) * lonModifier) || 0.0001;
+    
+    const pad = 40;
+    const scale = Math.min((w - pad * 2) / lonSpan, (h - pad * 2) / latSpan);
+
+    const tx = w / 2 + (masterCenters[idx].lon - (minLon + maxLon) / 2) * lonModifier * scale;
+    const ty = h / 2 - (masterCenters[idx].lat - (minLat + maxLat) / 2) * scale;
+    
+    return Math.hypot(tx - cx, ty - cy);
 }
 
 function getClickedIdx(x, y) {
@@ -310,32 +323,66 @@ function renderList() {
     });
 }
 
-// 在 drawMap 函數中修改計算邏輯
 function drawMap() {
     const canvas = document.getElementById('mapCanvas'), ctx = canvas.getContext('2d');
-    // ... 前段縮放代碼保持不變 ...
+    if (!canvas || masterCenters.length === 0) {
+        // 如果沒數據，清空畫布回深色背景
+        ctx.fillStyle = "#1e272e";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+
+    // 重要：確保 Canvas 繪圖解析度正確
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    const w = canvas.width, h = canvas.height;
 
     const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLon = Math.min(...lons), maxLon = Math.max(...lons);
     
-    // 計算經緯度的實際跨度
-    const latSpan = maxLat - minLat;
-    const lonSpan = (maxLon - minLon) * Math.cos(lats[0] * Math.PI / 180); // 修正經度跨度視覺比例
+    // 計算比例尺與修正量
+    const latSpan = (maxLat - minLat) || 0.0001;
+    const lonModifier = Math.cos(lats[0] * Math.PI / 180);
+    const lonSpan = ((maxLon - minLon) * lonModifier) || 0.0001;
     
     const pad = 40;
-    const availableW = rect.width - pad * 2;
-    const availableH = rect.height - pad * 2;
+    const scale = Math.min((w - pad * 2) / lonSpan, (h - pad * 2) / latSpan);
 
-    // 核心修復：強制使用統一的比例尺（取較小者，確保不超出邊界且不變形）
-    const scale = Math.min(availableW / (lonSpan || 1e-7), availableH / (latSpan || 1e-7));
+    const getX = (lon) => w / 2 + (lon - (minLon + maxLon) / 2) * lonModifier * scale;
+    const getY = (lat) => h / 2 - (lat - (minLat + maxLat) / 2) * scale;
 
-    const getX = (lon) => rect.width / 2 + (lon - (minLon + maxLon) / 2) * Math.cos(lats[0] * Math.PI / 180) * scale;
-    const getY = (lat) => rect.height / 2 - (lat - (minLat + maxLat) / 2) * scale;
+    // --- 開始繪圖 ---
+    ctx.fillStyle = "#1e272e";
+    ctx.fillRect(0, 0, w, h);
 
-    // ... 接下來的繪圖邏輯 ...
+    // 繪製路徑
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.setLineDash([5, 5]);
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 繪製點位
+    masterCenters.forEach((p, i) => {
+        const x = getX(p.lon), y = getY(p.lat);
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        // 選中點橘色，起點綠色，一般點紫色
+        ctx.fillStyle = (i === selectedIndex) ? "#e67e22" : (i === 0 ? "#00b894" : "#6c5ce7");
+        ctx.fill();
+        
+        ctx.fillStyle = "white";
+        ctx.font = "bold 11px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(i + 1, x, y - 12);
+    });
 }
-
 function getAllSteps() {
     let allSteps = [];
     const getQ = (c, t) => { let dL = t.lat - c.lat, dO = t.lon - c.lon; return (dL>=0 && dO>=0)?"NE":(dL>=0 && dO<0)?"NW":(dL<0 && dO<0)?"SW":"SE"; };
