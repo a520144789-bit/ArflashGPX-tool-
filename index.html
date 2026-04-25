@@ -187,50 +187,52 @@ window.onload = () => {
 // --- 歷史紀錄優化版 ---
 function saveState() {
     const currentState = JSON.stringify(masterCenters);
-    // 如果目前狀態跟最後一筆紀錄一樣，就不重複存
+    
+    // 防止重複儲存相同的狀態（例如點擊了但沒移動）
     if (historyStack.length > 0 && historyStack[historyStack.length - 1] === currentState) return;
     
     historyStack.push(currentState);
     
-    // 限制最大步數
-    if (historyStack.length > MAX_HISTORY) historyStack.shift();
+    // 限制最大紀錄步數
+    if (historyStack.length > MAX_HISTORY) {
+        historyStack.shift();
+    }
     
-    // 每當有新動作產生，必須清空 redoStack，否則會產生邏輯分支
+    // 只要有新動作，就必須清空 redo 堆疊，防止邏輯分支錯亂
     redoStack = []; 
 }
 
 function undo() {
-    // 歷史紀錄裡至少要有 2 筆（目前的一筆 + 過去的一筆）才能撤銷
+    // 歷史紀錄必須大於 1 筆（一筆當前，一筆過去）才能撤銷
     if (historyStack.length <= 1) return showToast("已是最初狀態");
 
-    // 1. 將「目前狀態」移出 history，放入 redo
+    // 1. 取出當前狀態，移到 redo 堆疊
     const currentState = historyStack.pop();
     redoStack.push(currentState);
 
-    // 2. 取出「上一筆狀態」並還原
-    const lastState = historyStack[historyStack.length - 1];
-    masterCenters = JSON.parse(lastState);
+    // 2. 讀取上一筆狀態（此時 history 的最後一筆就是目標）
+    const previousState = historyStack[historyStack.length - 1];
+    masterCenters = JSON.parse(previousState);
     
     selectedIndex = null;
-    renderAll(true); // 傳入 true 避免 renderAll 又去觸發 saveState
+    renderAll(true); // 傳入 true，避免 renderAll 再次觸發 saveState
     showToast("已撤銷");
 }
 
 function redo() {
     if (redoStack.length === 0) return showToast("沒有可重做動作");
 
-    // 1. 從 redo 取出並放入 history
+    // 1. 從 redo 取出並放回 history
     const nextState = redoStack.pop();
     historyStack.push(nextState);
 
-    // 2. 還原
+    // 2. 還原資料
     masterCenters = JSON.parse(nextState);
     
     selectedIndex = null;
     renderAll(true);
     showToast("已重做");
 }
-
 function rotateSelected() {
     if (selectedIndex === null) return showToast("請先選中一個點位");
     saveState();
@@ -276,6 +278,7 @@ function extractSub(bigQuad, subIndices) {
     return extracted;
 }
 
+// --- 修正分析點位的初始化 ---
 function analyzePoints() {
     const input = document.getElementById('coordsInput').value.trim();
     if (!input) return;
@@ -290,11 +293,12 @@ function analyzePoints() {
     });
 
     if (raw.length === 0) return;
+    
+    // 過濾重複座標
     raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7));
     
     let bigQuads = splitToFour(raw);
     let result = [];
-    // ... (保持你原本的 TSP 排序邏輯) ...
     try {
         result.push(...extractSub(bigQuads[0], [3, 0, 1])); 
         result.push(...extractSub(bigQuads[1], [0, 1, 2])); 
@@ -307,18 +311,21 @@ function analyzePoints() {
     } catch(e) {}
 
     masterCenters = result.length > 0 ? result : raw;
-    
-    // --- 重點：分析完後重設所有狀態 ---
+
+    // --- 重點：初始化歷史紀錄 ---
     historyStack = []; 
     redoStack = [];
+    // 立即存入當前（分析完後）的狀態作為「歷史第 0 步」
+    historyStack.push(JSON.stringify(masterCenters)); 
+    
     mapScale = 1; 
     offsetX = 0;
     offsetY = 0;
     selectedIndex = null;
     
-    renderAll(); // 這會觸發 saveState()，存入分析後的第一筆初始狀態
+    renderAll(true); // 傳入 true，不要讓它在初始化時又跑一次 saveState
+    showToast("分析完成，已建立初始備份");
 }
-
 
 // --- 繪圖核心 ---
 function drawMap() {
@@ -492,21 +499,24 @@ function handleMapSingleClick(x, y) {
         }
     }
 
-    if (clickedIdx !== -1) {
+if (clickedIdx !== -1) {
         if (selectedIndex === null) { 
             selectedIndex = clickedIdx; 
             showToast(`選中 #${clickedIdx + 1}`); 
         } else if (selectedIndex === clickedIdx) { 
             selectedIndex = null; 
         } else {
-            saveState();
+            // --- 重點：先存狀態，再改數據 ---
+            saveState(); 
             const item = masterCenters.splice(selectedIndex, 1)[0];
             masterCenters.splice(clickedIdx, 0, item);
             selectedIndex = null;
-            renderAll(true);
+            // 這裡傳入 true，因為上面已經手動 saveState 了
+            renderAll(true); 
         }
         drawMap();
-    } else { 
+    }
+     else { 
         selectedIndex = null; 
         drawMap(); 
     }
