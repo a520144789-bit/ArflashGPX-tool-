@@ -85,31 +85,30 @@
     <ul id="sortableList"></ul>
 </div>
 
-<div class="card" style="border-top: 5px solid #2ecc71;">
-    <h2 style="font-size: 16px; color: #27ae60; text-align: center; margin-top:0;">🎲 隨機採收座標清單</h2>
-    <textarea id="harvestDisplay" readonly style="height: 100px; background: #f8f9fa; cursor: default;" placeholder="點擊下方按鈕生成隨機座標..."></textarea>
+<div class="jump-section">
+    <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採收轉換器：</label>
     
-    <div class="btn-group" style="grid-template-columns: 1fr 1fr;">
-        <button style="background: #2ecc71;" onclick="generateHarvestPoints()">🎲 生成隨機座標</button>
-        <button style="background: #27ae60;" onclick="copyHarvestText()">📋 複製隨機座標</button>
+    <textarea id="jumpInput" style="height: 100px; background: #fff; margin-top: 8px;" placeholder="請導入或貼入待處理座標..."></textarea>
+
+    <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
+        <button style="background: #27ae60; font-size: 11px;" onclick="importFrom('harvest')">📥 從隨機區導入</button>
+        <button style="background: #2980b9; font-size: 11px;" onclick="importFrom('original')">📥 從原始區導入</button>
     </div>
 
-    <div class="jump-section">
-        <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採收 (東西各偏移 2.5m)：</label>
-        <select id="jumpGpxFormat" style="margin-top: 5px;">
-            <option value="arflash">ARflash (WPT)</option>
-            <option value="joystick">JoyStick (TRK)</option>
-            <option value="phantom">魅影 (WPT)</option>
-            <option value="fakegps">Fake GPS (WPT)</option>
-            <option value="ianygo">iAnyGo (TRK)</option>
-        </select>
-        <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 0;">
-            <button style="background: var(--warning);" onclick="copyJumpHarvestText()">📋 複製跳躍座標</button>
-            <button style="background: var(--danger);" onclick="downloadJumpGPX()">💾 下載跳躍GPX</button>
-        </div>
+    <select id="jumpGpxFormat">
+        <option value="arflash">ARflash (WPT)</option>
+        <option value="joystick">JoyStick (TRK)</option>
+        <option value="phantom">魅影 (WPT)</option>
+        <option value="fakegps">Fake GPS (WPT)</option>
+        <option value="ianygo">iAnyGo (TRK)</option>
+    </select>
+    
+    <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
+        <button style="background: var(--warning);" onclick="copyJumpHarvestText()">📋 複製跳躍座標</button>
+        <button style="background: var(--danger);" onclick="downloadJumpGPX()">💾 下載跳躍GPX</button>
+    </div>
     <button style="background: #0984e3; width: 100%; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製跳躍GPX</button>
 </div>
-    </div>
 </div>
 
 <div id="toast"></div>
@@ -204,6 +203,43 @@ function copyJumpHarvestText() {
     if (pts.length === 0) return showToast("請先生成隨機點位");
     const text = pts.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('\n');
     navigator.clipboard.writeText(text).then(() => showToast("📋 跳躍座標已複製"));
+}
+
+    // 導入功能：從指定來源抓取資料
+function importFrom(source) {
+    const sourceId = (source === 'harvest') ? 'harvestDisplay' : 'coordsInput';
+    const content = document.getElementById(sourceId).value.trim();
+    
+    if (!content) {
+        return showToast(source === 'harvest' ? "隨機區目前沒有座標" : "原始輸入區目前沒有座標");
+    }
+    
+    document.getElementById('jumpInput').value = content;
+    showToast(`✅ 已從${source === 'harvest' ? '隨機區' : '原始區'}導入`);
+}
+
+// 修改獲取點位的邏輯：現在只認 jumpInput
+function getJumpPoints() {
+    const rawText = document.getElementById('jumpInput').value.trim();
+    if (!rawText) return [];
+    
+    let jumpPoints = [];
+    const lines = rawText.split('\n');
+    lines.forEach((line, index) => {
+        // 使用正則拆分座標，相容逗號、空格或 Tab
+        const parts = line.trim().split(/[,|\s\t]+/);
+        if (parts.length >= 2) {
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                // 計算東西偏移 2.5m
+                const lonOffset = 2.5 / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
+                jumpPoints.push({ lat: lat, lon: lon - lonOffset, name: `J${index+1}W` });
+                jumpPoints.push({ lat: lat, lon: lon + lonOffset, name: `J${index+1}E` });
+            }
+        }
+    });
+    return jumpPoints;
 }
     // 複製跳躍 GPX 的功能
 function copyJumpGPX() {
