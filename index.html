@@ -88,7 +88,10 @@
 <div class="jump-section">
     <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採收轉換器：</label>
     
-    <textarea id="jumpInput" style="height: 100px; background: #fff; margin-top: 8px;" placeholder="請導入或貼入待處理座標..."></textarea>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+        <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 貼入或導入座標..."></textarea>
+        <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 30m 隨機化座標..."></textarea>
+    </div>
 
     <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
         <button style="background: #27ae60; font-size: 11px;" onclick="importFrom('harvest')">📥 從隨機區導入</button>
@@ -104,13 +107,11 @@
     </select>
     
     <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
-        <button style="background: var(--warning);" onclick="copyJumpHarvestText()">📋 複製跳躍座標</button>
+        <button style="background: #a29bfe; color: #2d3436;" onclick="transformToRandom()">🎲 轉換隨機座標</button>
         <button style="background: var(--danger);" onclick="downloadJumpGPX()">💾 下載跳躍GPX</button>
     </div>
     <button style="background: #0984e3; width: 100%; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製跳躍GPX</button>
 </div>
-</div>
-
 <div id="toast"></div>
 
 <script>
@@ -220,19 +221,19 @@ function importFrom(source) {
 
 // 修改獲取點位的邏輯：現在只認 jumpInput
 function getJumpPoints() {
-    const rawText = document.getElementById('jumpInput').value.trim();
-    if (!rawText) return [];
+    const sourceText = document.getElementById('randomResult').value.trim() || 
+                       document.getElementById('jumpInput').value.trim();
+    
+    if (!sourceText) return [];
     
     let jumpPoints = [];
-    const lines = rawText.split('\n');
+    const lines = sourceText.split('\n');
     lines.forEach((line, index) => {
-        // 使用正則拆分座標，相容逗號、空格或 Tab
         const parts = line.trim().split(/[,|\s\t]+/);
         if (parts.length >= 2) {
             const lat = parseFloat(parts[0]);
             const lon = parseFloat(parts[1]);
             if (!isNaN(lat) && !isNaN(lon)) {
-                // 計算東西偏移 2.5m
                 const lonOffset = 2.5 / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
                 jumpPoints.push({ lat: lat, lon: lon - lonOffset, name: `J${index+1}W` });
                 jumpPoints.push({ lat: lat, lon: lon + lonOffset, name: `J${index+1}E` });
@@ -240,6 +241,33 @@ function getJumpPoints() {
         }
     });
     return jumpPoints;
+}
+    // 新增：將輸入區的座標轉換為 30m 內的隨機點並顯示在右側
+function transformToRandom() {
+    const rawText = document.getElementById('jumpInput').value.trim();
+    if (!rawText) return showToast("請先導入或輸入座標");
+
+    let randomizedList = [];
+    const lines = rawText.split('\n');
+    
+    lines.forEach(line => {
+        const parts = line.trim().split(/[,|\s\t]+/);
+        if (parts.length >= 2) {
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                // 產生 30 公尺內的隨機偏移
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.sqrt(Math.random()) * 30; // 0~30公尺
+                const oLat = (dist * Math.cos(angle)) / LAT_M_PER_DEG;
+                const oLon = (dist * Math.sin(angle)) / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
+                randomizedList.push(`${(lat + oLat).toFixed(6)},${(lon + oLon).toFixed(6)}`);
+            }
+        }
+    });
+
+    document.getElementById('randomResult').value = randomizedList.join('\n');
+    showToast("🎲 已完成 30m 隨機化轉換");
 }
     // 複製跳躍 GPX 的功能
 function copyJumpGPX() {
