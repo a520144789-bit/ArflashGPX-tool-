@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v4.1</title>
+    <title>Suderpanda GPX v4.2</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐼</text></svg>">
     
     <style>
@@ -44,7 +44,7 @@
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda GPX maker v4.1 🐼</h1>
+    <h1>🐼 Suderpanda GPX maker v4.2 🐼</h1>
     <textarea id="coordsInput" placeholder="在此貼上座標..."></textarea>
 
     <div class="stats-panel">
@@ -113,7 +113,7 @@
 <div id="toast"></div>
 
 <script>
-// --- 全域變數與規則 (不變) ---
+// --- 全域變數與規則 (保持不變) ---
 let masterCenters = [];
 let mapScale = 1; let offsetX = 0; let offsetY = 0;
 let isDragging = false; let lastMouseX = 0; let lastMouseY = 0;
@@ -135,20 +135,26 @@ window.onload = () => {
     canvas.addEventListener('click', (e) => { const now = Date.now(), rect = canvas.getBoundingClientRect(); const x = (e.clientX - rect.left), y = (e.clientY - rect.top); if (now - lastClickTime < 300) handleMapDoubleClick(x, y); else handleMapSingleClick(x, y); lastClickTime = now; });
 };
 
-// --- 重點：修復 GPX 生成邏輯 ---
+// --- 完全按照 ARflash 原始檔案寫法 (不添加額外優化) ---
 function generateGPX(points, format) {
-    // 必須包含 xmlns 命名空間，否則 ARflash 等工具無法正確解析
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda" xmlns="http://www.topografix.com/GPX/1/1">`;
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="suder-gpx">`;
     
+    // 加入範例中的 metadata
+    const firstPt = points.length > 0 ? points[0] : {lat:0, lon:0};
+    const now = new Date();
+    const dateStr = (now.getMonth()+1).toString().padStart(2,'0') + now.getDate().toString().padStart(2,'0') + "_" + now.getHours().toString().padStart(2,'0') + now.getMinutes().toString().padStart(2,'0');
+    gpx += `\n  <metadata><name>Suderpanda_${dateStr}_(${firstPt.lat.toFixed(2)},${firstPt.lon.toFixed(2)})</name></metadata>`;
+
     if (format === 'joystick' || format === 'ianygo') {
-        gpx += `\n<trk><name>Suderpanda_Route</name><trkseg>`;
+        gpx += `\n  <trk><trkseg>`;
         points.forEach(p => {
-            gpx += `\n<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><ele>0</ele></trkpt>`;
+            gpx += `\n    <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"></trkpt>`;
         });
-        gpx += `\n</trkseg></trk>`;
+        gpx += `\n  </trkseg></trk>`;
     } else {
-        points.forEach(p => {
-            gpx += `\n<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><ele>0</ele><name>${p.name || 'P'}</name></wpt>`;
+        points.forEach((p, i) => {
+            // 完全照搬範例中的 <wpt> 格式
+            gpx += `\n  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><name>${p.name || 'P'+(i+1)}</name></wpt>`;
         });
     }
     gpx += `\n</gpx>`;
@@ -174,7 +180,7 @@ function downloadJumpGPX() {
     a.click();
 }
 
-// --- 其他原有功能 ---
+// --- 其他原有功能函數 (保持不變) ---
 function getJumpPoints() {
     const rawText = document.getElementById('harvestDisplay').value.trim();
     if (!rawText) return [];
