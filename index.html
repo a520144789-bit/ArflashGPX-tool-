@@ -86,7 +86,7 @@
 </div>
 
 <div class="jump-section">
-    <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採收轉換器                                                ⚡ 隨機座標生成區</label>
+    <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採果座標轉換器.隨機採果座標生成</label>
     
     <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-top: 8px; margin-bottom: 5px;">
         <button style="background: #2980b9; font-size: 11px;" onclick="importFrom('original')">📥 從原始區導入座標</button>
@@ -95,12 +95,11 @@
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
         <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 貼入或導入座標..."></textarea>
-        <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 30m 隨機化座標..."></textarea>
+        <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 隨機化座標..."></textarea>
     </div>
 
-    <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
-        <button style="background: var(--danger); font-size: 11px;" onclick="downloadJumpGPX()">💾 下載跳躍GPX</button>
-        <button style="background: #27ae60; font-size: 11px;" onclick="copyRandomContent()">📋 複製隨機區內容</button>
+    <div style="margin-bottom: 8px;">
+        <button style="background: #27ae60; width: 100%; padding: 10px; border-radius: 10px; font-size: 11px;" onclick="copyRandomContent()">📋 複製隨機座標文本</button>
     </div>
 
     <select id="jumpGpxFormat" style="margin-bottom: 8px;">
@@ -111,7 +110,10 @@
         <option value="ianygo">iAnyGo (TRK)</option>
     </select>
     
-    <button style="background: #0984e3; width: 100%; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製跳躍GPX</button>
+    <div class="btn-group" style="grid-template-columns: 1fr 1fr;">
+        <button style="background: #0984e3; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製跳躍GPX</button>
+        <button style="background: var(--danger); padding: 12px; border-radius: 10px;" onclick="downloadJumpGPX()">💾 下載跳躍GPX</button>
+    </div>
 </div>
 <div id="toast"></div>
 
