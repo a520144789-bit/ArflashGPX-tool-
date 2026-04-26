@@ -86,7 +86,7 @@
 </div>
 
 <div class="jump-section">
-    <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採收轉換器：</label>
+    <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採收座標轉換器：</label>
     
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
         <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 貼入或導入座標..."></textarea>
@@ -94,9 +94,24 @@
     </div>
 
     <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
-        <button style="background: #27ae60; font-size: 11px;" onclick="importFrom('harvest')">📥 從隨機區導入</button>
-        <button style="background: #2980b9; font-size: 11px;" onclick="importFrom('original')">📥 從原始區導入</button>
+        <button style="background: #2980b9; font-size: 11px;" onclick="importFrom('original')">📥 從原始區導入座標</button>
+        <button style="background: #27ae60; font-size: 11px;" onclick="copyRandomContent()">📋 複製隨機轉換座標</button>
     </div>
+
+    <select id="jumpGpxFormat">
+        <option value="arflash">ARflash (WPT)</option>
+        <option value="joystick">JoyStick (TRK)</option>
+        <option value="phantom">魅影 (WPT)</option>
+        <option value="fakegps">Fake GPS (WPT)</option>
+        <option value="ianygo">iAnyGo (TRK)</option>
+    </select>
+    
+    <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
+        <button style="background: #a29bfe; color: #2d3436;" onclick="transformToRandom()">🎲 轉換隨機座標</button>
+        <button style="background: var(--danger);" onclick="downloadJumpGPX()">💾 下載跳躍GPX</button>
+    </div>
+    <button style="background: #0984e3; width: 100%; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製跳躍GPX</button>
+</div>
 
     <select id="jumpGpxFormat">
         <option value="arflash">ARflash (WPT)</option>
@@ -206,17 +221,15 @@ function copyJumpHarvestText() {
     navigator.clipboard.writeText(text).then(() => showToast("📋 跳躍座標已複製"));
 }
 
-    // 導入功能：從指定來源抓取資料
-function importFrom(source) {
-    const sourceId = (source === 'harvest') ? 'harvestDisplay' : 'coordsInput';
+   function importFrom(source) {
+    // 雖然只剩原始區，但保留參數結構方便日後擴充
+    const sourceId = 'coordsInput';
     const content = document.getElementById(sourceId).value.trim();
     
-    if (!content) {
-        return showToast(source === 'harvest' ? "隨機區目前沒有座標" : "原始輸入區目前沒有座標");
-    }
+    if (!content) return showToast("原始輸入區目前沒有座標");
     
     document.getElementById('jumpInput').value = content;
-    showToast(`✅ 已從${source === 'harvest' ? '隨機區' : '原始區'}導入`);
+    showToast("✅ 已從原始區導入");
 }
 
 // 修改獲取點位的邏輯：現在只認 jumpInput
@@ -268,6 +281,15 @@ function transformToRandom() {
 
     document.getElementById('randomResult').value = randomizedList.join('\n');
     showToast("🎲 已完成 30m 隨機化轉換");
+}
+    // 新增：複製右側隨機區內容
+function copyRandomContent() {
+    const content = document.getElementById('randomResult').value.trim();
+    if (!content) return showToast("右側隨機區無內容");
+    
+    navigator.clipboard.writeText(content).then(() => {
+        showToast("📋 隨機座標已複製");
+    });
 }
     // 複製跳躍 GPX 的功能
 function copyJumpGPX() {
