@@ -23,6 +23,16 @@
         .btn-group-2 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; }
         button { padding: 12px 2px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; color: white; transition: 0.2s; }
         button:active { transform: scale(0.95); opacity: 0.8; }
+        <div class="card" style="margin-top: 20px; border-top: 5px solid #2ecc71;">
+    <h2 style="font-size: 16px; color: #27ae60; text-align: center;">🎲 隨機採收座標清單</h2>
+    <div style="background: #f1f2f6; border-radius: 12px; padding: 10px; margin-bottom: 10px;">
+        <textarea id="harvestDisplay" readonly style="height: 150px; background: #fff; cursor: default;" placeholder="點擊下方按鈕生成隨機座標..."></textarea>
+    </div>
+    <div class="btn-group">
+        <button style="background: #2ecc71;" onclick="generateHarvestPoints()">🎲 生成隨機採收點</button>
+        <button style="background: #27ae60;" onclick="copyHarvestText()">📋 複製純文字座標</button>
+    </div>
+</div>
         .btn-analyze { background: var(--success); }
         .btn-rotate { background: #e67e22; }
         .btn-copy { background: #0984e3; }
@@ -645,6 +655,43 @@ function downloadFinalGPX() {
 function copyToClipboard() {
     const gpx = buildGPXString();
     navigator.clipboard.writeText(gpx).then(() => showToast("✅ 已複製 GPX")).catch(() => showToast("❌ 複製失敗"));
+}
+    // 生成隨機採收點（純亂數偏移，無路徑邏輯）
+function generateHarvestPoints() {
+    if (masterCenters.length === 0) return showToast("請先分析並載入中心點位");
+
+    const displayArea = document.getElementById('harvestDisplay');
+    let harvestList = [];
+
+    masterCenters.forEach((center) => {
+        // 第一步：純亂數生成 (0~40公尺)
+        // 使用極座標隨機分佈
+        const angle = Math.random() * Math.PI * 2; // 0 ~ 360度隨機角度
+        const distance = Math.sqrt(Math.random()) * 40; // 0 ~ 40公尺隨機距離
+
+        // 轉換為經緯度偏移量
+        const offsetLat = (distance * Math.cos(angle)) / LAT_M_PER_DEG;
+        const offsetLon = (distance * Math.sin(angle)) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180));
+
+        const hLat = (center.lat + offsetLat).toFixed(6);
+        const hLon = (center.lon + offsetLon).toFixed(6);
+
+        harvestList.push(`${hLat},${hLon}`);
+    });
+
+    // 第二步：顯示在網頁下方的文字區塊
+    displayArea.value = harvestList.join('\n');
+    showToast(`✅ 已生成 ${harvestList.length} 組隨機採收座標`);
+}
+
+// 複製純文字座標功能
+function copyHarvestText() {
+    const text = document.getElementById('harvestDisplay').value;
+    if (!text) return showToast("目前沒有座標可供複製");
+
+    navigator.clipboard.writeText(text).then(() => {
+        showToast("📋 座標文字已複製");
+    }).catch(() => showToast("❌ 複製失敗"));
 }
 
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
