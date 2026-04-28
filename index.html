@@ -173,6 +173,100 @@ function buildGPXString() {
     return generateGPX(steps, fmt);
 }
 
+// --- 雙層象限核心邏輯 ---
+function splitToFour(pts) {
+    if (pts.length === 0) return [[],[],[],[]];
+    let lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
+    let midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    let midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+    let res = [[],[],[],[]];
+    pts.forEach(p => {
+        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p); // Q1(NE)
+        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p); // Q2(NW)
+        else if (p.lat < midLat && p.lon < midLon) res[2].push(p); // Q3(SW)
+        else res[3].push(p); // Q4(SE)
+    });
+    return res;
+}
+
+function extractOrdered(quads, orderArray) {
+    let result = [];
+    orderArray.forEach(idx => {
+        if (quads[idx] && quads[idx].length > 0) {
+            // 在每一最小單位內執行 TSP 以確保局部最短
+            result.push(...runTSP(quads[idx], 0));
+        }
+    });
+    return result;
+}
+
+function runTSP(points, startIdx) {
+    if (points.length <= 1) return points;
+    let pool = [...points], ordered = [], current = pool.splice(startIdx, 1)[0];
+    ordered.push(current);
+    while(pool.length > 0) {
+        let cIdx = 0, minDist = Infinity;
+        pool.forEach((p, i) => {
+            let d = Math.hypot(p.lat - current.lat, p.lon - current.lon);
+            if(d < minDist) { minDist = d; cIdx = i; }
+        });
+        current = pool.splice(cIdx, 1)[0];
+        ordered.push(current);
+    }
+    return ordered;
+}
+
+    function analyzePoints() {
+    const inputStr = document.getElementById('coordsInput').value.trim();
+    if (!inputStr) return;
+    
+    let raw = [];
+    inputStr.split('\n').forEach(line => {
+        let p = line.trim().split(/[,|\s\t]+/);
+        if (p.length >= 2) {
+            let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
+            if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon, rotation: 0});
+        }
+    });
+    if (raw.length === 0) return;
+    
+    // 過濾重複
+    raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7));
+
+    // 1. 第一層切分 (大象限)
+    let BigQ = splitToFour(raw);
+    
+    // 2. 第二層切分 (小象限)
+    let subQ = BigQ.map(q => splitToFour(q));
+
+    let sortedResult = [];
+    // 執行你指定的自定義順序
+    // Q1 ➜ 4,1,2
+    sortedResult.push(...extractOrdered(subQ[0], [3, 0, 1]));
+    // Q2 ➜ 1,2,3
+    sortedResult.push(...extractOrdered(subQ[1], [0, 1, 2]));
+    // Q3 ➜ 2,3,4
+    sortedResult.push(...extractOrdered(subQ[2], [1, 2, 3]));
+    // Q4 ➜ 3,4,1
+    sortedResult.push(...extractOrdered(subQ[3], [2, 3, 0]));
+    
+    // 補齊剩餘順序：Q4.2 ➜ Q3.1 ➜ Q2.4 ➜ Q1.3
+    sortedResult.push(...extractOrdered(subQ[3], [1]));
+    sortedResult.push(...extractOrdered(subQ[2], [0]));
+    sortedResult.push(...extractOrdered(subQ[1], [3]));
+    sortedResult.push(...extractOrdered(subQ[0], [2]));
+
+    masterCenters = sortedResult;
+    
+    // 初始化狀態
+    historyStack = [JSON.stringify(masterCenters)];
+    redoStack = [];
+    mapScale = 1; offsetX = 0; offsetY = 0; selectedIndex = null;
+    
+    renderAll(true);
+    showToast("🔍 雙層四象限排序已套用");
+}
+    
 function downloadJumpGPX() {
     const pts = getJumpPoints();
     if (pts.length === 0) return showToast("請先生成隨機點位");
@@ -298,7 +392,6 @@ function saveState() { const currentState = JSON.stringify(masterCenters); if (h
 function undo() { if (historyStack.length <= 1) return showToast("已是最初狀態"); redoStack.push(historyStack.pop()); masterCenters = JSON.parse(historyStack[historyStack.length - 1]); selectedIndex = null; renderAll(true); }
 function redo() { if (redoStack.length === 0) return showToast("沒有可重做動作"); const nextState = redoStack.pop(); historyStack.push(nextState); masterCenters = JSON.parse(nextState); selectedIndex = null; renderAll(true); }
 function rotateSelected() { if (selectedIndex === null) return showToast("請先選中一個點位"); saveState(); masterCenters[selectedIndex].rotation = ((masterCenters[selectedIndex].rotation || 0) + 1) % 8; renderAll(true); }
-function analyzePoints() { const input = document.getElementById('coordsInput').value.trim(); if (!input) return; let raw = []; input.split('\n').forEach(line => { let p = line.trim().split(/[,|\s\t]+/); if (p.length >= 2) { let lat = parseFloat(p[0]), lon = parseFloat(p[1]); if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon, rotation: 0}); } }); if (raw.length === 0) return; raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7)); masterCenters = raw; historyStack = [JSON.stringify(masterCenters)]; redoStack = []; mapScale = 1; offsetX = 0; offsetY = 0; selectedIndex = null; renderAll(true); showToast("分析完成"); }
 function drawMap() { const canvas = document.getElementById('mapCanvas'); if (!canvas || masterCenters.length === 0) return; const dpr = window.devicePixelRatio || 1, rect = canvas.getBoundingClientRect(); canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); const w = rect.width, h = rect.height; const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon); const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons); const lonMod = Math.cos(lats[0] * Math.PI / 180); const scale = Math.min((w-80)/(((maxLon-minLon)*lonMod)||0.0001), (h-80)/((maxLat-minLat)||0.0001)); ctx.clearRect(0,0,w,h); ctx.fillStyle="#1e272e"; ctx.fillRect(0,0,w,h); ctx.save(); ctx.translate(w/2, h/2); ctx.scale(mapScale, mapScale); ctx.translate(offsetX, offsetY); ctx.translate(-w/2, -h/2); const getX = (lon) => w/2 + (lon - (minLon+maxLon)/2) * lonMod * scale; const getY = (lat) => h/2 - (lat - (minLat+maxLat)/2) * scale; ctx.beginPath(); ctx.strokeStyle="#ff4757"; ctx.lineWidth=1.5; masterCenters.forEach((p, i) => { if(i===0) ctx.moveTo(getX(p.lon), getY(p.lat)); else ctx.lineTo(getX(p.lon), getY(p.lat)); }); ctx.stroke(); masterCenters.forEach((center, i) => { const x = getX(center.lon), y = getY(center.lat), isS = (i === selectedIndex); const prev = masterCenters[i>0?i-1:masterCenters.length-1], next = masterCenters[i<masterCenters.length-1?i+1:0]; const getQ = (c,t) => { let dL=t.lat-c.lat, dO=t.lon-c.lon; return (dL>=0&&dO>=0)?"NE":(dL>=0&&dO<0)?"NW":(dL<0&&dO<0)?"SW":"SE"; }; const base = (RULES[`${getQ(center,prev)}_${getQ(center,next)}`] || [45,135,"01",225,315]); const rot = (center.rotation||0)*45; const pts = base.map(s => { if(s==="01") return {x,y}; let r = (s+rot)*Math.PI/180; return { x: x+Math.sin(r)*12, y: y-Math.cos(r)*12 }; }); ctx.beginPath(); ctx.strokeStyle = isS?"#f1c40f":"rgba(241,196,15,0.6)"; ctx.lineWidth=isS?2:1; pts.forEach((p,idx)=>{ if(idx===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); }); ctx.stroke(); pts.forEach(p => { if(p.x===x && p.y===y) return; ctx.beginPath(); ctx.arc(p.x,p.y,2.5,0,Math.PI*2); ctx.fillStyle=isS?"#f1c40f":"rgba(255,255,255,0.6)"; ctx.fill(); }); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle=isS?"#e67e22":(i===0?"#00b894":"rgba(108,92,231,0.6)"); ctx.fill(); ctx.font="bold 10px Arial"; ctx.textAlign="center"; ctx.strokeStyle="black"; ctx.lineWidth=3; ctx.strokeText(i+1, x, y+3.5); ctx.fillStyle="white"; ctx.fillText(i+1, x, y+3.5); }); ctx.restore(); }
 function handleMapSingleClick(x,y) { const rect = document.getElementById('mapCanvas').getBoundingClientRect(); const w = rect.width, h = rect.height; const rx = (x - w/2)/mapScale - offsetX + w/2, ry = (y - h/2)/mapScale - offsetY + h/2; let clickIdx = -1; for(let i=0; i<masterCenters.length; i++) { if(getDistToPoint(i, rx, ry) < 22/mapScale) { clickIdx = i; break; } } if(clickIdx !== -1) { if(selectedIndex === null) selectedIndex = clickIdx; else if(selectedIndex === clickIdx) selectedIndex = null; else { saveState(); let it = masterCenters.splice(selectedIndex, 1)[0]; masterCenters.splice(clickIdx, 0, it); selectedIndex = null; renderAll(true); } drawMap(); } else { selectedIndex = null; drawMap(); } }
 function getDistToPoint(idx, rx, ry) { const rect = document.getElementById('mapCanvas').getBoundingClientRect(); const w = rect.width, h = rect.height, lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon); const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons); const lonMod = Math.cos(lats[0]*Math.PI/180), scale = Math.min((w-80)/(((maxLon-minLon)*lonMod)||0.0001), (h-80)/((maxLat-minLat)||0.0001)); const tx = w/2 + (masterCenters[idx].lon - (minLon+maxLon)/2) * lonMod * scale; const ty = h/2 - (masterCenters[idx].lat - (minLat+maxLat)/2) * scale; return Math.hypot(tx-rx, ty-ry); }
