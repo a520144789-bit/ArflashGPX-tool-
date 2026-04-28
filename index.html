@@ -303,15 +303,26 @@ function copyJumpHarvestText() {
     navigator.clipboard.writeText(text).then(() => showToast("📋 跳躍座標已複製"));
 }
 
-   function importFrom(source) {
-    // 雖然只剩原始區，但保留參數結構方便日後擴充
-    const sourceId = 'coordsInput';
-    const content = document.getElementById(sourceId).value.trim();
+  function importFrom(source) {
+    let content = "";
     
-    if (!content) return showToast("原始輸入區目前沒有座標");
+    // 檢查全域變數 masterCenters 是否有排序後的資料
+    if (masterCenters && masterCenters.length > 0) {
+        // 將排序後的座標陣列轉換回文字格式 (lat,lon)
+        content = masterCenters.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('\n');
+    } else {
+        // 如果還沒按過分析排序，則抓取原始文字框
+        const sourceId = 'coordsInput';
+        content = document.getElementById(sourceId).value.trim();
+    }
     
+    if (!content) {
+        return showToast("原始區目前沒有資料，請先貼上座標並點擊「分析排序」");
+    }
+    
+    // 將結果填入跳躍區的輸入框
     document.getElementById('jumpInput').value = content;
-    showToast("✅ 已從原始區導入");
+    showToast("✅ 已導入排序後的座標組");
 }
 
 // 修改獲取點位的邏輯：現在只認 jumpInput
