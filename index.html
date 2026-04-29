@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v4.2</title>
+    <title>Suderpanda GPX v5.0</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐼</text></svg>">
     
     <style>
@@ -461,6 +461,64 @@ function copyJumpGPX() {
         showToast("❌ 複製失敗");
     });
 }
+    function renderAll(clearSelected = false) {
+    if (clearSelected) selectedIndex = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (masterCenters.length === 0) return;
+
+    // 獲取當前模式
+    const mode = document.getElementById('pathMode').value;
+    
+    // 計算所有點位的投影座標 (包含子點位)
+    // 這裡我們直接呼叫 getAllSteps() 來獲取當前模式下的所有實際座標
+    const allSteps = getAllSteps();
+    
+    // 1. 繪製路徑連線
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 68, 68, 0.6)"; // 紅色路徑線
+    ctx.lineWidth = 2;
+    
+    allSteps.forEach((p, i) => {
+        let screenP = toScreen(p.lat, p.lon);
+        if (i === 0) ctx.moveTo(screenP.x, screenP.y);
+        else ctx.lineTo(screenP.x, screenP.y);
+    });
+    ctx.stroke();
+
+    // 2. 繪製點位
+    allSteps.forEach((p, i) => {
+        let screenP = toScreen(p.lat, p.lon);
+        
+        // 區分母點與子點的視覺效果
+        const isMaster = p.name.endsWith("-02") || p.name.endsWith("-01"); // 簡化判斷：中心或入口
+        
+        ctx.beginPath();
+        if (mode === 'surroundJump') {
+            // 跳躍模式：子點用小圓點，母點中心用大一點的圓
+            ctx.arc(screenP.x, screenP.y, isMaster ? 4 : 2, 0, Math.PI * 2);
+            ctx.fillStyle = isMaster ? "#ff4444" : "#ffffff";
+        } else {
+            // 20邏輯模式：維持原本的大點顯示
+            ctx.arc(screenP.x, screenP.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = (Math.floor(i/5) === selectedIndex) ? "#00ff00" : "#ffffff";
+        }
+        ctx.fill();
+        ctx.strokeStyle = "#333";
+        ctx.stroke();
+
+        // 3. 繪製標籤 (僅在跳躍模式顯示 ZXX-XX，避免畫面太亂)
+        if (mode === 'surroundJump' && mapScale > 1.5) { // 縮放足夠大才顯示文字
+            ctx.fillStyle = "white";
+            ctx.font = "10px Arial";
+            ctx.fillText(p.name.split('-')[1], screenP.x + 5, screenP.y - 5);
+        } else if (p.name.endsWith("-01")) {
+            // 預設模式或縮小時只顯示母點編號
+            ctx.fillStyle = "yellow";
+            ctx.font = "bold 12px Arial";
+            ctx.fillText(p.name.split('-')[0], screenP.x + 8, screenP.y + 8);
+        }
+    });
+}
 function saveState() { const currentState = JSON.stringify(masterCenters); if (historyStack.length > 0 && historyStack[historyStack.length - 1] === currentState) return; historyStack.push(currentState); if (historyStack.length > MAX_HISTORY) historyStack.shift(); redoStack = []; }
 function undo() { if (historyStack.length <= 1) return showToast("已是最初狀態"); redoStack.push(historyStack.pop()); masterCenters = JSON.parse(historyStack[historyStack.length - 1]); selectedIndex = null; renderAll(true); }
 function redo() { if (redoStack.length === 0) return showToast("沒有可重做動作"); const nextState = redoStack.pop(); historyStack.push(nextState); masterCenters = JSON.parse(nextState); selectedIndex = null; renderAll(true); }
@@ -470,7 +528,6 @@ function handleMapSingleClick(x,y) { const rect = document.getElementById('mapCa
 function getDistToPoint(idx, rx, ry) { const rect = document.getElementById('mapCanvas').getBoundingClientRect(); const w = rect.width, h = rect.height, lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon); const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons); const lonMod = Math.cos(lats[0]*Math.PI/180), scale = Math.min((w-80)/(((maxLon-minLon)*lonMod)||0.0001), (h-80)/((maxLat-minLat)||0.0001)); const tx = w/2 + (masterCenters[idx].lon - (minLon+maxLon)/2) * lonMod * scale; const ty = h/2 - (masterCenters[idx].lat - (minLat+maxLat)/2) * scale; return Math.hypot(tx-rx, ty-ry); }
 function renderList() { const list = document.getElementById('sortableList'); list.innerHTML = ""; masterCenters.forEach((p,i) => { const li = document.createElement('li'); li.className = 'sort-item'+(selectedIndex===i?' selected':''); li.innerText = i+1; li.onclick = () => { if(selectedIndex === null) selectedIndex = i; else if(selectedIndex === i) selectedIndex = null; else { saveState(); let it = masterCenters.splice(selectedIndex, 1)[0]; masterCenters.splice(i, 0, it); selectedIndex = null; } renderAll(true); }; list.appendChild(li); }); }
 function updateStats() { const speed = parseFloat(document.getElementById('speedInput').value) || 19; document.getElementById('pointCount').innerText = masterCenters.length; const steps = getAllSteps(); let dist = 0; for (let i = 1; i < steps.length; i++) { const dLat = (steps[i].lat - steps[i-1].lat) * LAT_M_PER_DEG; const dLon = (steps[i].lon - steps[i-1].lon) * LAT_M_PER_DEG * Math.cos(steps[i].lat * Math.PI / 180); dist += Math.hypot(dLat, dLon); } const km = dist/1000; document.getElementById('totalDist').innerText = km.toFixed(2); document.getElementById('totalTime').innerText = Math.round((km/speed)*60); }
-function renderAll(skip = false) { if(!skip) saveState(); renderList(); drawMap(); updateStats(); }
 function downloadFinalGPX() { const blob = new Blob([buildGPXString()], { type: 'application/gpx+xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Suderpanda_${Date.now()}.gpx`; a.click(); }
 function copyToClipboard() { navigator.clipboard.writeText(buildGPXString()).then(() => showToast("✅ 已複製 GPX")); }
 function generateHarvestPoints() { if (masterCenters.length === 0) return showToast("請先分析並載入中心點位"); let list = []; masterCenters.forEach((center) => { const angle = Math.random() * Math.PI * 2; const dist = Math.sqrt(Math.random()) * 40; const oLat = (dist * Math.cos(angle)) / LAT_M_PER_DEG; const oLon = (dist * Math.sin(angle)) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)); list.push(`${(center.lat + oLat).toFixed(6)},${(center.lon + oLon).toFixed(6)}`); }); document.getElementById('harvestDisplay').value = list.join('\n'); showToast(`✅ 已生成 ${list.length} 組隨機點`); }
