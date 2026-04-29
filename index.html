@@ -124,7 +124,7 @@
 <div id="toast"></div>
 
 <script>
-// --- 全域變數與規則 (保持不變) ---
+// --- 全域變數與規則 ---
 let masterCenters = [];
 let mapScale = 1; let offsetX = 0; let offsetY = 0;
 let isDragging = false; let lastMouseX = 0; let lastMouseY = 0;
@@ -134,63 +134,140 @@ let historyStack = []; let redoStack = [];
 const MAX_HISTORY = 30; const RADIUS = 36; const LAT_M_PER_DEG = 111132;
 const RULES = { "NE_SE": [45, 315, "01", 225, 135], "NE_SW": [45, 315, "01", 135, 225], "NE_NW": [45, 135, "01", 225, 315], "NW_NE": [315, 225, "01", 135, 45], "NW_SE": [315, 45, "01", 225, 135], "NW_SW": [315, 45, "01", 135, 225], "SE_SW": [135, 45, "01", 315, 225], "SE_NW": [135, 225, "01", 45, 315], "SE_NE": [135, 225, "01", 315, 45], "SW_NW": [225, 135, "01", 45, 315], "SW_NE": [225, 135, "01", 315, 45], "SW_SE": [225, 315, "01", 45, 135] };
 
+let canvas, ctx; // 在全域定義
+
 window.onload = () => {
-    const canvas = document.getElementById('mapCanvas');
-    canvas.addEventListener('touchstart', (e) => { if (e.touches.length === 2) { initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); initialScale = mapScale; } else if (e.touches.length === 1) { isDragging = true; lastMouseX = e.touches[0].pageX; lastMouseY = e.touches[0].pageY; } });
-    canvas.addEventListener('wheel', (e) => { e.preventDefault(); let newScale = mapScale + (-e.deltaY) * 0.001; mapScale = Math.min(Math.max(newScale, 0.5), 8); drawMap(); }, { passive: false });
-    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (e.touches.length === 2) { const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); mapScale = Math.min(Math.max(initialScale * (currentDist / initialPinchDist), 0.5), 8); drawMap(); } else if (e.touches.length === 1 && isDragging) { offsetX += (e.touches[0].pageX - lastMouseX) / mapScale; offsetY += (e.touches[0].pageY - lastMouseY) / mapScale; lastMouseX = e.touches[0].pageX; lastMouseY = e.touches[0].pageY; drawMap(); } }, { passive: false });
+    canvas = document.getElementById('mapCanvas');
+    ctx = canvas.getContext('2d');
+    
+    // 初始化 Canvas 大小
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    canvas.addEventListener('touchstart', (e) => { 
+        if (e.touches.length === 2) { 
+            initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); 
+            initialScale = mapScale; 
+        } else if (e.touches.length === 1) { 
+            isDragging = true; 
+            lastMouseX = e.touches[0].pageX; 
+            lastMouseY = e.touches[0].pageY; 
+        } 
+    });
+    
+    canvas.addEventListener('wheel', (e) => { 
+        e.preventDefault(); 
+        let newScale = mapScale + (-e.deltaY) * 0.001; 
+        mapScale = Math.min(Math.max(newScale, 0.5), 8); 
+        renderAll(); 
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => { 
+        e.preventDefault(); 
+        if (e.touches.length === 2) { 
+            const currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); 
+            mapScale = Math.min(Math.max(initialScale * (currentDist / initialPinchDist), 0.5), 8); 
+            renderAll(); 
+        } else if (e.touches.length === 1 && isDragging) { 
+            offsetX += (e.touches[0].pageX - lastMouseX) / mapScale; 
+            offsetY += (e.touches[0].pageY - lastMouseY) / mapScale; 
+            lastMouseX = e.touches[0].pageX; 
+            lastMouseY = e.touches[0].pageY; 
+            renderAll(); 
+        } 
+    }, { passive: false });
+
     canvas.addEventListener('touchend', () => { isDragging = false; });
     canvas.addEventListener('mousedown', (e) => { isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY; });
-    window.addEventListener('mousemove', (e) => { if (isDragging) { offsetX += (e.clientX - lastMouseX) / mapScale; offsetY += (e.clientY - lastMouseY) / mapScale; lastMouseX = e.clientX; lastMouseY = e.clientY; drawMap(); } });
+    window.addEventListener('mousemove', (e) => { 
+        if (isDragging) { 
+            offsetX += (e.clientX - lastMouseX) / mapScale; 
+            offsetY += (e.clientY - lastMouseY) / mapScale; 
+            lastMouseX = e.clientX; 
+            lastMouseY = e.clientY; 
+            renderAll(); 
+        } 
+    });
     window.addEventListener('mouseup', () => { isDragging = false; });
-    canvas.addEventListener('click', (e) => { const now = Date.now(), rect = canvas.getBoundingClientRect(); const x = (e.clientX - rect.left), y = (e.clientY - rect.top); if (now - lastClickTime < 300) handleMapDoubleClick(x, y); else handleMapSingleClick(x, y); lastClickTime = now; });
+    canvas.addEventListener('click', (e) => { 
+        const now = Date.now(), rect = canvas.getBoundingClientRect(); 
+        const x = (e.clientX - rect.left), y = (e.clientY - rect.top); 
+        if (now - lastClickTime < 300) handleMapDoubleClick(x, y); 
+        else handleMapSingleClick(x, y); 
+        lastClickTime = now; 
+    });
 };
 
-// --- 完全按照 ARflash 原始檔案寫法 (不添加額外優化) ---
-function generateGPX(points, format) {
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="suder-gpx">`;
-    
-    // 加入範例中的 metadata
-    const firstPt = points.length > 0 ? points[0] : {lat:0, lon:0};
-    const now = new Date();
-    const dateStr = (now.getMonth()+1).toString().padStart(2,'0') + now.getDate().toString().padStart(2,'0') + "_" + now.getHours().toString().padStart(2,'0') + now.getMinutes().toString().padStart(2,'0');
-    gpx += `\n  <metadata><name>Suderpanda_${dateStr}_(${firstPt.lat.toFixed(2)},${firstPt.lon.toFixed(2)})</name></metadata>`;
+function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // 重設
+    ctx.scale(dpr, dpr);
+}
 
-    if (format === 'joystick' || format === 'ianygo') {
-        gpx += `\n  <trk><trkseg>`;
-        points.forEach(p => {
-            gpx += `\n    <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"></trkpt>`;
-        });
-        gpx += `\n  </trkseg></trk>`;
-    } else {
-        points.forEach((p, i) => {
-            // 完全照搬範例中的 <wpt> 格式
-            gpx += `\n  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><name>${p.name || 'P'+(i+1)}</name></wpt>`;
-        });
+// 輔助函數：經緯度轉畫布座標
+function toScreen(lat, lon) {
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    if (masterCenters.length === 0) return { x: w/2, y: h/2 };
+
+    const lats = masterCenters.map(p => p.lat);
+    const lons = masterCenters.map(p => p.lon);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+    const lonMod = Math.cos(lats[0] * Math.PI / 180);
+    const baseScale = Math.min((w - 80) / (((maxLon - minLon) * lonMod) || 0.0001), (h - 80) / ((maxLat - minLat) || 0.0001));
+
+    // 應用縮放與平移
+    let x = w/2 + (lon - (minLon + maxLon) / 2) * lonMod * baseScale;
+    let y = h/2 - (lat - (minLat + maxLat) / 2) * baseScale;
+
+    // 套用地圖的縮放和平移 (Transform)
+    x = (x - w/2) * mapScale + w/2 + offsetX * mapScale;
+    y = (y - h/2) * mapScale + h/2 + offsetY * mapScale;
+
+    return { x, y };
+}
+
+function handleMapSingleClick(x, y) {
+    let clickIdx = -1;
+    for (let i = 0; i < masterCenters.length; i++) {
+        let screenP = toScreen(masterCenters[i].lat, masterCenters[i].lon);
+        let dist = Math.hypot(screenP.x - x, screenP.y - y);
+        if (dist < 15) { clickIdx = i; break; }
     }
-    gpx += `\n</gpx>`;
-    return gpx;
+    if (clickIdx !== -1) {
+        if (selectedIndex === null) selectedIndex = clickIdx;
+        else if (selectedIndex === clickIdx) selectedIndex = null;
+        else {
+            saveState();
+            let it = masterCenters.splice(selectedIndex, 1)[0];
+            masterCenters.splice(clickIdx, 0, it);
+            selectedIndex = null;
+        }
+        renderAll();
+    } else {
+        selectedIndex = null;
+        renderAll();
+    }
 }
 
-// --- 修正後的下載與複製函數 ---
-function buildGPXString() {
-    const fmt = document.getElementById('gpxFormat').value;
-    const steps = getAllSteps();
-    return generateGPX(steps, fmt);
-}
+function handleMapDoubleClick(x, y) { /* 可擴充功能 */ }
 
-// --- 雙層象限核心邏輯 ---
+// --- 排序核心邏輯 ---
 function splitToFour(pts) {
-    if (pts.length === 0) return [[],[],[],[]];
+    if (pts.length === 0) return [[], [], [], []];
     let lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
     let midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
     let midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
-    let res = [[],[],[],[]];
+    let res = [[], [], [], []];
     pts.forEach(p => {
-        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p); // Q1(NE)
-        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p); // Q2(NW)
-        else if (p.lat < midLat && p.lon < midLon) res[2].push(p); // Q3(SW)
-        else res[3].push(p); // Q4(SE)
+        if (p.lat >= midLat && p.lon >= midLon) res[0].push(p); 
+        else if (p.lat >= midLat && p.lon < midLon) res[1].push(p); 
+        else if (p.lat < midLat && p.lon < midLon) res[2].push(p); 
+        else res[3].push(p);
     });
     return res;
 }
@@ -198,10 +275,7 @@ function splitToFour(pts) {
 function extractOrdered(quads, orderArray) {
     let result = [];
     orderArray.forEach(idx => {
-        if (quads[idx] && quads[idx].length > 0) {
-            // 在每一最小單位內執行 TSP 以確保局部最短
-            result.push(...runTSP(quads[idx], 0));
-        }
+        if (quads[idx] && quads[idx].length > 0) result.push(...runTSP(quads[idx], 0));
     });
     return result;
 }
@@ -210,11 +284,11 @@ function runTSP(points, startIdx) {
     if (points.length <= 1) return points;
     let pool = [...points], ordered = [], current = pool.splice(startIdx, 1)[0];
     ordered.push(current);
-    while(pool.length > 0) {
+    while (pool.length > 0) {
         let cIdx = 0, minDist = Infinity;
         pool.forEach((p, i) => {
             let d = Math.hypot(p.lat - current.lat, p.lon - current.lon);
-            if(d < minDist) { minDist = d; cIdx = i; }
+            if (d < minDist) { minDist = d; cIdx = i; }
         });
         current = pool.splice(cIdx, 1)[0];
         ordered.push(current);
@@ -222,77 +296,95 @@ function runTSP(points, startIdx) {
     return ordered;
 }
 
-    function analyzePoints() {
+function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value.trim();
     if (!inputStr) return;
-    
     let raw = [];
     inputStr.split('\n').forEach(line => {
         let p = line.trim().split(/[,|\s\t]+/);
         if (p.length >= 2) {
             let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
-            if (!isNaN(lat) && !isNaN(lon)) raw.push({lat, lon, rotation: 0});
+            if (!isNaN(lat) && !isNaN(lon)) raw.push({ lat, lon, rotation: 0 });
         }
     });
     if (raw.length === 0) return;
-    
-    // 過濾重複
-    raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat-p.lat)<1e-7 && Math.abs(t.lon-p.lon)<1e-7));
+    raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat - p.lat) < 1e-7 && Math.abs(t.lon - p.lon) < 1e-7));
 
-    // 1. 第一層切分 (大象限)
     let BigQ = splitToFour(raw);
-    
-    // 2. 第二層切分 (小象限)
     let subQ = BigQ.map(q => splitToFour(q));
-
     let sortedResult = [];
-    // 執行你指定的自定義順序
-    // Q1 ➜ 4,1,2
     sortedResult.push(...extractOrdered(subQ[0], [3, 0, 1]));
-    // Q2 ➜ 1,2,3
     sortedResult.push(...extractOrdered(subQ[1], [0, 1, 2]));
-    // Q3 ➜ 2,3,4
     sortedResult.push(...extractOrdered(subQ[2], [1, 2, 3]));
-    // Q4 ➜ 3,4,1
     sortedResult.push(...extractOrdered(subQ[3], [2, 3, 0]));
-    
-    // 補齊剩餘順序：Q4.2 ➜ Q3.1 ➜ Q2.4 ➜ Q1.3
     sortedResult.push(...extractOrdered(subQ[3], [1]));
     sortedResult.push(...extractOrdered(subQ[2], [0]));
     sortedResult.push(...extractOrdered(subQ[1], [3]));
     sortedResult.push(...extractOrdered(subQ[0], [2]));
 
     masterCenters = sortedResult;
-    
-    // 初始化狀態
     historyStack = [JSON.stringify(masterCenters)];
     redoStack = [];
     mapScale = 1; offsetX = 0; offsetY = 0; selectedIndex = null;
-    
-    renderAll(true);
+    renderAll();
     showToast("🔍 雙層四象限排序已套用");
 }
+
+function renderAll(clearSelected = false) {
+    if (clearSelected) selectedIndex = null;
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    if (masterCenters.length === 0) return;
+
+    const mode = document.getElementById('pathMode').value;
+    const allSteps = getAllSteps();
     
-function downloadJumpGPX() {
-    const pts = getJumpPoints();
-    if (pts.length === 0) return showToast("請先生成隨機點位");
-    const fmt = document.getElementById('jumpGpxFormat').value;
-    const gpx = generateGPX(pts, fmt);
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `JumpHarvest_${Date.now()}.gpx`;
-    a.click();
+    // 繪製路徑
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 68, 68, 0.6)";
+    ctx.lineWidth = 2;
+    allSteps.forEach((p, i) => {
+        let screenP = toScreen(p.lat, p.lon);
+        if (i === 0) ctx.moveTo(screenP.x, screenP.y);
+        else ctx.lineTo(screenP.x, screenP.y);
+    });
+    ctx.stroke();
+
+    // 繪製點位
+    allSteps.forEach((p, i) => {
+        let screenP = toScreen(p.lat, p.lon);
+        const isMaster = p.name.endsWith("-02") || p.name.endsWith("-01");
+        
+        ctx.beginPath();
+        if (mode === 'surroundJump') {
+            ctx.arc(screenP.x, screenP.y, isMaster ? 4 : 2, 0, Math.PI * 2);
+            ctx.fillStyle = isMaster ? "#ff4444" : "#ffffff";
+        } else {
+            const masterIdx = Math.floor(i / 5);
+            ctx.arc(screenP.x, screenP.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = (masterIdx === selectedIndex) ? "#00ff00" : "#ffffff";
+        }
+        ctx.fill();
+        ctx.strokeStyle = "#333";
+        ctx.stroke();
+
+        if (p.name.endsWith("-01") || (mode === 'surroundJump' && mapScale > 2)) {
+            ctx.fillStyle = "yellow";
+            ctx.font = "bold 10px Arial";
+            ctx.fillText(p.name, screenP.x + 5, screenP.y - 5);
+        }
+    });
+    renderList();
+    updateStats();
 }
-    function getAllSteps() {
+
+function getAllSteps() {
     let all = [];
     const mode = document.getElementById('pathMode').value;
-
     masterCenters.forEach((c, i) => {
-        const prefix = `Z${String(i + 1).padStart(2, '0')}`; // 依照你的習慣格式 ZXX
-
+        const prefix = `Z${String(i + 1).padStart(2, '0')}`;
         if (mode === 'interact20') {
-            // --- 原有的 20 邏輯交互 ---
             let prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
             let next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
             const getQ = (curr, target) => {
@@ -301,7 +393,6 @@ function downloadJumpGPX() {
             };
             let base = (RULES[`${getQ(c, prev)}_${getQ(c, next)}`] || [45, 135, "01", 225, 315]);
             let rot = (c.rotation || 0) * 45;
-
             base.forEach((s, sub) => {
                 let lat = c.lat, lon = c.lon;
                 if (s !== "01") {
@@ -311,22 +402,8 @@ function downloadJumpGPX() {
                 }
                 all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
             });
-
-        } else if (mode === 'surroundJump') {
-            // --- v5.0 新增：環繞跳躍邏輯 ---
-            // 定義相對偏移 (角度, 距離)
-            const jumpSteps = [
-                { ang: 0,   dist: 37 }, // 01: 正北 37m
-                { ang: null,dist: 0  }, // 02: 中心點
-                { ang: 180, dist: 27 }, // 03: 180° 27m
-                { ang: 240, dist: 27 }, // 04: 240° 27m
-                { ang: 300, dist: 27 }, // 05: 300° 27m
-                { ang: 0,   dist: 27 }, // 06: 0° 27m
-                { ang: 60,  dist: 27 }, // 07: 60° 27m
-                { ang: 120, dist: 27 }, // 08: 120° 27m
-                { ang: 180, dist: 27 }  // 09: 回到 180°
-            ];
-
+        } else {
+            const jumpSteps = [{ ang: 0, dist: 37 }, { ang: null, dist: 0 }, { ang: 180, dist: 27 }, { ang: 240, dist: 27 }, { ang: 300, dist: 27 }, { ang: 0, dist: 27 }, { ang: 60, dist: 27 }, { ang: 120, dist: 27 }, { ang: 180, dist: 27 }];
             jumpSteps.forEach((s, sub) => {
                 let lat = c.lat, lon = c.lon;
                 if (s.dist !== 0 && s.ang !== null) {
@@ -341,197 +418,134 @@ function downloadJumpGPX() {
     return all;
 }
 
-// --- 其他原有功能函數 (保持不變) ---
-function getJumpPoints() {
-    const rawText = document.getElementById('harvestDisplay').value.trim();
-    if (!rawText) return [];
-    let jumpPoints = [];
-    const lines = rawText.split('\n');
-    lines.forEach((line, index) => {
-        const parts = line.split(',');
-        if (parts.length >= 2) {
-            const lat = parseFloat(parts[0]); const lon = parseFloat(parts[1]);
-            const lonOffset = 2.5 / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
-            jumpPoints.push({ lat: lat, lon: lon - lonOffset, name: `J${index+1}W` });
-            jumpPoints.push({ lat: lat, lon: lon + lonOffset, name: `J${index+1}E` });
-        }
-    });
-    return jumpPoints;
-}
-function copyJumpHarvestText() {
-    const pts = getJumpPoints();
-    if (pts.length === 0) return showToast("請先生成隨機點位");
-    const text = pts.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('\n');
-    navigator.clipboard.writeText(text).then(() => showToast("📋 跳躍座標已複製"));
-}
-
-  function importFrom(source) {
-    let content = "";
-    
-    // 檢查全域變數 masterCenters 是否有排序後的資料
-    if (masterCenters && masterCenters.length > 0) {
-        // 將排序後的座標陣列轉換回文字格式 (lat,lon)
-        content = masterCenters.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('\n');
-    } else {
-        // 如果還沒按過分析排序，則抓取原始文字框
-        const sourceId = 'coordsInput';
-        content = document.getElementById(sourceId).value.trim();
-    }
-    
-    if (!content) {
-        return showToast("原始區目前沒有資料，請先貼上座標並點擊「分析排序」");
-    }
-    
-    // 將結果填入跳躍區的輸入框
-    document.getElementById('jumpInput').value = content;
-    showToast("✅ 已導入排序後的座標組");
-}
-
-// 修改獲取點位的邏輯：現在只認 jumpInput
-function getJumpPoints() {
-    const sourceText = document.getElementById('randomResult').value.trim() || 
-                       document.getElementById('jumpInput').value.trim();
-    
-    if (!sourceText) return [];
-    
-    let jumpPoints = [];
-    const lines = sourceText.split('\n');
-    lines.forEach((line, index) => {
-        const parts = line.trim().split(/[,|\s\t]+/);
-        if (parts.length >= 2) {
-            const lat = parseFloat(parts[0]);
-            const lon = parseFloat(parts[1]);
-            if (!isNaN(lat) && !isNaN(lon)) {
-                const lonOffset = 2.5 / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
-                jumpPoints.push({ lat: lat, lon: lon - lonOffset, name: `J${index+1}W` });
-                jumpPoints.push({ lat: lat, lon: lon + lonOffset, name: `J${index+1}E` });
+// --- 介面同步與工具 ---
+function renderList() {
+    const list = document.getElementById('sortableList');
+    list.innerHTML = "";
+    masterCenters.forEach((p, i) => {
+        const li = document.createElement('li');
+        li.className = 'sort-item' + (selectedIndex === i ? ' selected' : '');
+        li.innerText = i + 1;
+        li.onclick = () => {
+            if (selectedIndex === null) selectedIndex = i;
+            else if (selectedIndex === i) selectedIndex = null;
+            else {
+                saveState();
+                let it = masterCenters.splice(selectedIndex, 1)[0];
+                masterCenters.splice(i, 0, it);
+                selectedIndex = null;
             }
-        }
+            renderAll();
+        };
+        list.appendChild(li);
     });
-    return jumpPoints;
 }
-    // 新增：將輸入區的座標轉換為 30m 內的隨機點並顯示在右側
+
+function updateStats() {
+    const speed = parseFloat(document.getElementById('speedInput').value) || 19;
+    document.getElementById('pointCount').innerText = masterCenters.length;
+    const steps = getAllSteps();
+    let dist = 0;
+    for (let i = 1; i < steps.length; i++) {
+        const dLat = (steps[i].lat - steps[i - 1].lat) * LAT_M_PER_DEG;
+        const dLon = (steps[i].lon - steps[i - 1].lon) * LAT_M_PER_DEG * Math.cos(steps[i].lat * Math.PI / 180);
+        dist += Math.hypot(dLat, dLon);
+    }
+    const km = dist / 1000;
+    document.getElementById('totalDist').innerText = km.toFixed(2);
+    document.getElementById('totalTime').innerText = Math.round((km / speed) * 60);
+}
+
+function importFrom(source) {
+    if (masterCenters.length === 0) return showToast("原始區沒有資料，請先分析排序");
+    let content = masterCenters.map(p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`).join('\n');
+    document.getElementById('jumpInput').value = content;
+    showToast("✅ 已導入排序後的座標");
+}
+
 function transformToRandom() {
     const rawText = document.getElementById('jumpInput').value.trim();
-    if (!rawText) return showToast("請先導入或輸入座標");
-
+    if (!rawText) return showToast("請先導入座標");
     let randomizedList = [];
-    const lines = rawText.split('\n');
-    
-    lines.forEach(line => {
+    rawText.split('\n').forEach(line => {
         const parts = line.trim().split(/[,|\s\t]+/);
         if (parts.length >= 2) {
-            const lat = parseFloat(parts[0]);
-            const lon = parseFloat(parts[1]);
+            const lat = parseFloat(parts[0]), lon = parseFloat(parts[1]);
             if (!isNaN(lat) && !isNaN(lon)) {
-                // 產生 30 公尺內的隨機偏移
                 const angle = Math.random() * Math.PI * 2;
-                const dist = Math.sqrt(Math.random()) * 30; // 0~30公尺
+                const dist = Math.sqrt(Math.random()) * 30;
                 const oLat = (dist * Math.cos(angle)) / LAT_M_PER_DEG;
                 const oLon = (dist * Math.sin(angle)) / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
                 randomizedList.push(`${(lat + oLat).toFixed(6)},${(lon + oLon).toFixed(6)}`);
             }
         }
     });
-
     document.getElementById('randomResult').value = randomizedList.join('\n');
-    showToast("🎲 已完成 30m 隨機化轉換");
+    showToast("🎲 已完成隨機化");
 }
-    // 新增：複製右側隨機區內容
-function copyRandomContent() {
-    const content = document.getElementById('randomResult').value.trim();
-    if (!content) return showToast("右側隨機區無內容");
-    
-    navigator.clipboard.writeText(content).then(() => {
-        showToast("📋 隨機座標已複製");
+
+function getJumpPoints() {
+    const sourceText = document.getElementById('randomResult').value.trim() || document.getElementById('jumpInput').value.trim();
+    if (!sourceText) return [];
+    let jumpPoints = [];
+    sourceText.split('\n').forEach((line, index) => {
+        const parts = line.trim().split(/[,|\s\t]+/);
+        if (parts.length >= 2) {
+            const lat = parseFloat(parts[0]), lon = parseFloat(parts[1]);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                const lonOffset = 2.5 / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
+                jumpPoints.push({ lat: lat, lon: lon - lonOffset, name: `J${index + 1}W` });
+                jumpPoints.push({ lat: lat, lon: lon + lonOffset, name: `J${index + 1}E` });
+            }
+        }
     });
+    return jumpPoints;
 }
-    // 複製跳躍 GPX 的功能
-function copyJumpGPX() {
+
+// --- 通用功能 ---
+function generateGPX(points, format) {
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="suder-gpx">`;
+    const now = new Date();
+    const dateStr = (now.getMonth() + 1).toString().padStart(2, '0') + now.getDate().toString().padStart(2, '0');
+    gpx += `\n  <metadata><name>Suderpanda_${dateStr}</name></metadata>`;
+    if (format === 'joystick' || format === 'ianygo') {
+        gpx += `\n  <trk><trkseg>`;
+        points.forEach(p => { gpx += `\n    <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"></trkpt>`; });
+        gpx += `\n  </trkseg></trk>`;
+    } else {
+        points.forEach((p, i) => { gpx += `\n  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><name>${p.name || 'P' + (i + 1)}</name></wpt>`; });
+    }
+    gpx += `\n</gpx>`;
+    return gpx;
+}
+
+function downloadFinalGPX() {
+    const gpx = generateGPX(getAllSteps(), document.getElementById('gpxFormat').value);
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Suderpanda_${Date.now()}.gpx`;
+    a.click();
+}
+
+function downloadJumpGPX() {
     const pts = getJumpPoints();
-    if (pts.length === 0) return showToast("請先生成隨機點位");
-    
-    // 獲取跳躍區塊專屬的格式選單值
-    const fmt = document.getElementById('jumpGpxFormat').value;
-    const gpx = generateGPX(pts, fmt);
-    
-    navigator.clipboard.writeText(gpx).then(() => {
-        showToast("✅ 已依選定格式複製跳躍 GPX");
-    }).catch(err => {
-        showToast("❌ 複製失敗");
-    });
+    if (pts.length === 0) return showToast("無座標可導出");
+    const gpx = generateGPX(pts, document.getElementById('jumpGpxFormat').value);
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Jump_${Date.now()}.gpx`;
+    a.click();
 }
-    function renderAll(clearSelected = false) {
-    if (clearSelected) selectedIndex = null;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (masterCenters.length === 0) return;
 
-    // 獲取當前模式
-    const mode = document.getElementById('pathMode').value;
-    
-    // 計算所有點位的投影座標 (包含子點位)
-    // 這裡我們直接呼叫 getAllSteps() 來獲取當前模式下的所有實際座標
-    const allSteps = getAllSteps();
-    
-    // 1. 繪製路徑連線
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(255, 68, 68, 0.6)"; // 紅色路徑線
-    ctx.lineWidth = 2;
-    
-    allSteps.forEach((p, i) => {
-        let screenP = toScreen(p.lat, p.lon);
-        if (i === 0) ctx.moveTo(screenP.x, screenP.y);
-        else ctx.lineTo(screenP.x, screenP.y);
-    });
-    ctx.stroke();
-
-    // 2. 繪製點位
-    allSteps.forEach((p, i) => {
-        let screenP = toScreen(p.lat, p.lon);
-        
-        // 區分母點與子點的視覺效果
-        const isMaster = p.name.endsWith("-02") || p.name.endsWith("-01"); // 簡化判斷：中心或入口
-        
-        ctx.beginPath();
-        if (mode === 'surroundJump') {
-            // 跳躍模式：子點用小圓點，母點中心用大一點的圓
-            ctx.arc(screenP.x, screenP.y, isMaster ? 4 : 2, 0, Math.PI * 2);
-            ctx.fillStyle = isMaster ? "#ff4444" : "#ffffff";
-        } else {
-            // 20邏輯模式：維持原本的大點顯示
-            ctx.arc(screenP.x, screenP.y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = (Math.floor(i/5) === selectedIndex) ? "#00ff00" : "#ffffff";
-        }
-        ctx.fill();
-        ctx.strokeStyle = "#333";
-        ctx.stroke();
-
-        // 3. 繪製標籤 (僅在跳躍模式顯示 ZXX-XX，避免畫面太亂)
-        if (mode === 'surroundJump' && mapScale > 1.5) { // 縮放足夠大才顯示文字
-            ctx.fillStyle = "white";
-            ctx.font = "10px Arial";
-            ctx.fillText(p.name.split('-')[1], screenP.x + 5, screenP.y - 5);
-        } else if (p.name.endsWith("-01")) {
-            // 預設模式或縮小時只顯示母點編號
-            ctx.fillStyle = "yellow";
-            ctx.font = "bold 12px Arial";
-            ctx.fillText(p.name.split('-')[0], screenP.x + 8, screenP.y + 8);
-        }
-    });
-}
-function saveState() { const currentState = JSON.stringify(masterCenters); if (historyStack.length > 0 && historyStack[historyStack.length - 1] === currentState) return; historyStack.push(currentState); if (historyStack.length > MAX_HISTORY) historyStack.shift(); redoStack = []; }
-function undo() { if (historyStack.length <= 1) return showToast("已是最初狀態"); redoStack.push(historyStack.pop()); masterCenters = JSON.parse(historyStack[historyStack.length - 1]); selectedIndex = null; renderAll(true); }
-function redo() { if (redoStack.length === 0) return showToast("沒有可重做動作"); const nextState = redoStack.pop(); historyStack.push(nextState); masterCenters = JSON.parse(nextState); selectedIndex = null; renderAll(true); }
-function rotateSelected() { if (selectedIndex === null) return showToast("請先選中一個點位"); saveState(); masterCenters[selectedIndex].rotation = ((masterCenters[selectedIndex].rotation || 0) + 1) % 8; renderAll(true); }
-function drawMap() { const canvas = document.getElementById('mapCanvas'); if (!canvas || masterCenters.length === 0) return; const dpr = window.devicePixelRatio || 1, rect = canvas.getBoundingClientRect(); canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); const w = rect.width, h = rect.height; const lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon); const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons); const lonMod = Math.cos(lats[0] * Math.PI / 180); const scale = Math.min((w-80)/(((maxLon-minLon)*lonMod)||0.0001), (h-80)/((maxLat-minLat)||0.0001)); ctx.clearRect(0,0,w,h); ctx.fillStyle="#1e272e"; ctx.fillRect(0,0,w,h); ctx.save(); ctx.translate(w/2, h/2); ctx.scale(mapScale, mapScale); ctx.translate(offsetX, offsetY); ctx.translate(-w/2, -h/2); const getX = (lon) => w/2 + (lon - (minLon+maxLon)/2) * lonMod * scale; const getY = (lat) => h/2 - (lat - (minLat+maxLat)/2) * scale; ctx.beginPath(); ctx.strokeStyle="#ff4757"; ctx.lineWidth=1.5; masterCenters.forEach((p, i) => { if(i===0) ctx.moveTo(getX(p.lon), getY(p.lat)); else ctx.lineTo(getX(p.lon), getY(p.lat)); }); ctx.stroke(); masterCenters.forEach((center, i) => { const x = getX(center.lon), y = getY(center.lat), isS = (i === selectedIndex); const prev = masterCenters[i>0?i-1:masterCenters.length-1], next = masterCenters[i<masterCenters.length-1?i+1:0]; const getQ = (c,t) => { let dL=t.lat-c.lat, dO=t.lon-c.lon; return (dL>=0&&dO>=0)?"NE":(dL>=0&&dO<0)?"NW":(dL<0&&dO<0)?"SW":"SE"; }; const base = (RULES[`${getQ(center,prev)}_${getQ(center,next)}`] || [45,135,"01",225,315]); const rot = (center.rotation||0)*45; const pts = base.map(s => { if(s==="01") return {x,y}; let r = (s+rot)*Math.PI/180; return { x: x+Math.sin(r)*12, y: y-Math.cos(r)*12 }; }); ctx.beginPath(); ctx.strokeStyle = isS?"#f1c40f":"rgba(241,196,15,0.6)"; ctx.lineWidth=isS?2:1; pts.forEach((p,idx)=>{ if(idx===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); }); ctx.stroke(); pts.forEach(p => { if(p.x===x && p.y===y) return; ctx.beginPath(); ctx.arc(p.x,p.y,2.5,0,Math.PI*2); ctx.fillStyle=isS?"#f1c40f":"rgba(255,255,255,0.6)"; ctx.fill(); }); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle=isS?"#e67e22":(i===0?"#00b894":"rgba(108,92,231,0.6)"); ctx.fill(); ctx.font="bold 10px Arial"; ctx.textAlign="center"; ctx.strokeStyle="black"; ctx.lineWidth=3; ctx.strokeText(i+1, x, y+3.5); ctx.fillStyle="white"; ctx.fillText(i+1, x, y+3.5); }); ctx.restore(); }
-function handleMapSingleClick(x,y) { const rect = document.getElementById('mapCanvas').getBoundingClientRect(); const w = rect.width, h = rect.height; const rx = (x - w/2)/mapScale - offsetX + w/2, ry = (y - h/2)/mapScale - offsetY + h/2; let clickIdx = -1; for(let i=0; i<masterCenters.length; i++) { if(getDistToPoint(i, rx, ry) < 22/mapScale) { clickIdx = i; break; } } if(clickIdx !== -1) { if(selectedIndex === null) selectedIndex = clickIdx; else if(selectedIndex === clickIdx) selectedIndex = null; else { saveState(); let it = masterCenters.splice(selectedIndex, 1)[0]; masterCenters.splice(clickIdx, 0, it); selectedIndex = null; renderAll(true); } drawMap(); } else { selectedIndex = null; drawMap(); } }
-function getDistToPoint(idx, rx, ry) { const rect = document.getElementById('mapCanvas').getBoundingClientRect(); const w = rect.width, h = rect.height, lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon); const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons); const lonMod = Math.cos(lats[0]*Math.PI/180), scale = Math.min((w-80)/(((maxLon-minLon)*lonMod)||0.0001), (h-80)/((maxLat-minLat)||0.0001)); const tx = w/2 + (masterCenters[idx].lon - (minLon+maxLon)/2) * lonMod * scale; const ty = h/2 - (masterCenters[idx].lat - (minLat+maxLat)/2) * scale; return Math.hypot(tx-rx, ty-ry); }
-function renderList() { const list = document.getElementById('sortableList'); list.innerHTML = ""; masterCenters.forEach((p,i) => { const li = document.createElement('li'); li.className = 'sort-item'+(selectedIndex===i?' selected':''); li.innerText = i+1; li.onclick = () => { if(selectedIndex === null) selectedIndex = i; else if(selectedIndex === i) selectedIndex = null; else { saveState(); let it = masterCenters.splice(selectedIndex, 1)[0]; masterCenters.splice(i, 0, it); selectedIndex = null; } renderAll(true); }; list.appendChild(li); }); }
-function updateStats() { const speed = parseFloat(document.getElementById('speedInput').value) || 19; document.getElementById('pointCount').innerText = masterCenters.length; const steps = getAllSteps(); let dist = 0; for (let i = 1; i < steps.length; i++) { const dLat = (steps[i].lat - steps[i-1].lat) * LAT_M_PER_DEG; const dLon = (steps[i].lon - steps[i-1].lon) * LAT_M_PER_DEG * Math.cos(steps[i].lat * Math.PI / 180); dist += Math.hypot(dLat, dLon); } const km = dist/1000; document.getElementById('totalDist').innerText = km.toFixed(2); document.getElementById('totalTime').innerText = Math.round((km/speed)*60); }
-function downloadFinalGPX() { const blob = new Blob([buildGPXString()], { type: 'application/gpx+xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Suderpanda_${Date.now()}.gpx`; a.click(); }
-function copyToClipboard() { navigator.clipboard.writeText(buildGPXString()).then(() => showToast("✅ 已複製 GPX")); }
-function generateHarvestPoints() { if (masterCenters.length === 0) return showToast("請先分析並載入中心點位"); let list = []; masterCenters.forEach((center) => { const angle = Math.random() * Math.PI * 2; const dist = Math.sqrt(Math.random()) * 40; const oLat = (dist * Math.cos(angle)) / LAT_M_PER_DEG; const oLon = (dist * Math.sin(angle)) / (LAT_M_PER_DEG * Math.cos(center.lat * Math.PI / 180)); list.push(`${(center.lat + oLat).toFixed(6)},${(center.lon + oLon).toFixed(6)}`); }); document.getElementById('harvestDisplay').value = list.join('\n'); showToast(`✅ 已生成 ${list.length} 組隨機點`); }
-function copyHarvestText() { const t = document.getElementById('harvestDisplay').value; if (!t) return showToast("無座標可複製"); navigator.clipboard.writeText(t).then(() => showToast("📋 原始座標已複製")); }
+function copyToClipboard() { navigator.clipboard.writeText(generateGPX(getAllSteps(), document.getElementById('gpxFormat').value)).then(() => showToast("✅ 已複製 GPX")); }
+function copyRandomContent() { navigator.clipboard.writeText(document.getElementById('randomResult').value).then(() => showToast("📋 隨機座標已複製")); }
+function copyJumpGPX() { navigator.clipboard.writeText(generateGPX(getJumpPoints(), document.getElementById('jumpGpxFormat').value)).then(() => showToast("✅ 已複製跳躍 GPX")); }
+function saveState() { historyStack.push(JSON.stringify(masterCenters)); if (historyStack.length > MAX_HISTORY) historyStack.shift(); redoStack = []; }
+function undo() { if (historyStack.length <= 1) return; redoStack.push(historyStack.pop()); masterCenters = JSON.parse(historyStack[historyStack.length - 1]); renderAll(); }
+function redo() { if (redoStack.length === 0) return; const next = redoStack.pop(); historyStack.push(next); masterCenters = JSON.parse(next); renderAll(); }
+function rotateSelected() { if (selectedIndex === null) return; saveState(); masterCenters[selectedIndex].rotation = ((masterCenters[selectedIndex].rotation || 0) + 1) % 8; renderAll(); }
 function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.opacity = "1"; setTimeout(() => t.style.opacity = "0", 2000); }
 </script>
 </body>
