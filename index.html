@@ -57,7 +57,13 @@
             <span>預計耗時：<b id="totalTime">0</b> 分鐘</span>
         </div>
     </div>
-
+<div style="margin-bottom: 10px;">
+    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">路徑生成模式：</label>
+    <select id="pathMode" onchange="renderAll(true)">
+        <option value="interact20">行走路徑 (20邏輯交互)</option>
+        <option value="surroundJump">跳躍路徑 (環繞跳躍)</option>
+    </select>
+</div>
     <div style="margin-bottom: 10px;">
         <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：</label>
         <select id="gpxFormat">
@@ -278,6 +284,62 @@ function downloadJumpGPX() {
     a.download = `JumpHarvest_${Date.now()}.gpx`;
     a.click();
 }
+    function getAllSteps() {
+    let all = [];
+    const mode = document.getElementById('pathMode').value;
+
+    masterCenters.forEach((c, i) => {
+        const prefix = `Z${String(i + 1).padStart(2, '0')}`; // 依照你的習慣格式 ZXX
+
+        if (mode === 'interact20') {
+            // --- 原有的 20 邏輯交互 ---
+            let prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
+            let next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
+            const getQ = (curr, target) => {
+                let dL = target.lat - curr.lat, dO = target.lon - curr.lon;
+                return (dL >= 0 && dO >= 0) ? "NE" : (dL >= 0 && dO < 0) ? "NW" : (dL < 0 && dO < 0) ? "SW" : "SE";
+            };
+            let base = (RULES[`${getQ(c, prev)}_${getQ(c, next)}`] || [45, 135, "01", 225, 315]);
+            let rot = (c.rotation || 0) * 45;
+
+            base.forEach((s, sub) => {
+                let lat = c.lat, lon = c.lon;
+                if (s !== "01") {
+                    let r = (s + rot) * Math.PI / 180;
+                    lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
+                    lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(c.lat * Math.PI / 180)));
+                }
+                all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
+            });
+
+        } else if (mode === 'surroundJump') {
+            // --- v5.0 新增：環繞跳躍邏輯 ---
+            // 定義相對偏移 (角度, 距離)
+            const jumpSteps = [
+                { ang: 0,   dist: 37 }, // 01: 正北 37m
+                { ang: null,dist: 0  }, // 02: 中心點
+                { ang: 180, dist: 27 }, // 03: 180° 27m
+                { ang: 240, dist: 27 }, // 04: 240° 27m
+                { ang: 300, dist: 27 }, // 05: 300° 27m
+                { ang: 0,   dist: 27 }, // 06: 0° 27m
+                { ang: 60,  dist: 27 }, // 07: 60° 27m
+                { ang: 120, dist: 27 }, // 08: 120° 27m
+                { ang: 180, dist: 27 }  // 09: 回到 180°
+            ];
+
+            jumpSteps.forEach((s, sub) => {
+                let lat = c.lat, lon = c.lon;
+                if (s.dist !== 0 && s.ang !== null) {
+                    let r = s.ang * Math.PI / 180;
+                    lat += (s.dist * Math.cos(r) / LAT_M_PER_DEG);
+                    lon += (s.dist * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(c.lat * Math.PI / 180)));
+                }
+                all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
+            });
+        }
+    });
+    return all;
+}
 
 // --- 其他原有功能函數 (保持不變) ---
 function getJumpPoints() {
@@ -408,7 +470,6 @@ function handleMapSingleClick(x,y) { const rect = document.getElementById('mapCa
 function getDistToPoint(idx, rx, ry) { const rect = document.getElementById('mapCanvas').getBoundingClientRect(); const w = rect.width, h = rect.height, lats = masterCenters.map(p => p.lat), lons = masterCenters.map(p => p.lon); const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons); const lonMod = Math.cos(lats[0]*Math.PI/180), scale = Math.min((w-80)/(((maxLon-minLon)*lonMod)||0.0001), (h-80)/((maxLat-minLat)||0.0001)); const tx = w/2 + (masterCenters[idx].lon - (minLon+maxLon)/2) * lonMod * scale; const ty = h/2 - (masterCenters[idx].lat - (minLat+maxLat)/2) * scale; return Math.hypot(tx-rx, ty-ry); }
 function renderList() { const list = document.getElementById('sortableList'); list.innerHTML = ""; masterCenters.forEach((p,i) => { const li = document.createElement('li'); li.className = 'sort-item'+(selectedIndex===i?' selected':''); li.innerText = i+1; li.onclick = () => { if(selectedIndex === null) selectedIndex = i; else if(selectedIndex === i) selectedIndex = null; else { saveState(); let it = masterCenters.splice(selectedIndex, 1)[0]; masterCenters.splice(i, 0, it); selectedIndex = null; } renderAll(true); }; list.appendChild(li); }); }
 function updateStats() { const speed = parseFloat(document.getElementById('speedInput').value) || 19; document.getElementById('pointCount').innerText = masterCenters.length; const steps = getAllSteps(); let dist = 0; for (let i = 1; i < steps.length; i++) { const dLat = (steps[i].lat - steps[i-1].lat) * LAT_M_PER_DEG; const dLon = (steps[i].lon - steps[i-1].lon) * LAT_M_PER_DEG * Math.cos(steps[i].lat * Math.PI / 180); dist += Math.hypot(dLat, dLon); } const km = dist/1000; document.getElementById('totalDist').innerText = km.toFixed(2); document.getElementById('totalTime').innerText = Math.round((km/speed)*60); }
-function getAllSteps() { let all = []; masterCenters.forEach((c, i) => { let prev = masterCenters[i>0?i-1:masterCenters.length-1], next = masterCenters[i<masterCenters.length-1?i+1:0]; const getQ = (c,t) => { let dL=t.lat-c.lat, dO=t.lon-c.lon; return (dL>=0&&dO>=0)?"NE":(dL>=0&&dO<0)?"NW":(dL<0&&dO<0)?"SW":"SE"; }; let base = (RULES[`${getQ(c,prev)}_${getQ(c,next)}`] || [45,135,"01",225,315]), rot = (c.rotation||0)*45; base.forEach((s, sub) => { let lat = c.lat, lon = c.lon; if(s!=="01") { let r = (s+rot)*Math.PI/180; lat += (RADIUS*Math.cos(r)/LAT_M_PER_DEG); lon += (RADIUS*Math.sin(r)/(LAT_M_PER_DEG*Math.cos(c.lat*Math.PI/180))); } all.push({lat, lon, name:`M${String(i+1).padStart(2,'0')}.${sub+1}`}); }); }); return all; }
 function renderAll(skip = false) { if(!skip) saveState(); renderList(); drawMap(); updateStats(); }
 function downloadFinalGPX() { const blob = new Blob([buildGPXString()], { type: 'application/gpx+xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Suderpanda_${Date.now()}.gpx`; a.click(); }
 function copyToClipboard() { navigator.clipboard.writeText(buildGPXString()).then(() => showToast("✅ 已複製 GPX")); }
