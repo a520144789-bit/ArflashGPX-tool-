@@ -402,16 +402,38 @@ function getAllSteps() {
                 }
                 all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
             });
-        } else {
-            const jumpSteps = [{ ang: 0, dist: 37 }, { ang: null, dist: 0 }, { ang: 180, dist: 27 }, { ang: 240, dist: 27 }, { ang: 300, dist: 27 }, { ang: 0, dist: 27 }, { ang: 60, dist: 27 }, { ang: 120, dist: 27 }, { ang: 180, dist: 27 }];
-            jumpSteps.forEach((s, sub) => {
+                } else if (mode === 'surroundJump') {
+            // --- v5.2 更新：環繞跳躍邏輯 (10 點位版本) ---
+            const RADIUS_25 = 25; // 環繞半徑 25m
+            
+            // 定義相對偏移 (角度, 距離, 名稱後綴)
+            const jumpSteps = [
+                { ang: 0,   dist: 45,  suffix: "01N45" }, // 01: 正北 45m
+                { ang: 0,   dist: 30,  suffix: "02N30" }, // 02: 正北 30m
+                { ang: null,dist: 0,   suffix: "03C"   }, // 03: 中心點
+                { ang: 180, dist: RADIUS_25, suffix: "04-180"  }, // 04: 正南 25m
+                { ang: 240, dist: RADIUS_25, suffix: "05-240"  }, // 05
+                { ang: 300, dist: RADIUS_25, suffix: "06-300"  }, // 06
+                { ang: 0,   dist: RADIUS_25, suffix: "07-0"    }, // 07: 正北 25m
+                { ang: 60,  dist: RADIUS_25, suffix: "08-60"   }, // 08
+                { ang: 120, dist: RADIUS_25, suffix: "09-120"  }, // 09
+                { ang: 180, dist: RADIUS_25, suffix: "10-180R" }  // 10: 回到起點
+            ];
+
+            jumpSteps.forEach((s) => {
                 let lat = c.lat, lon = c.lon;
-                if (s.dist !== 0 && s.ang !== null) {
+                // 計算偏移
+                if (s.dist !== 0) {
                     let r = s.ang * Math.PI / 180;
                     lat += (s.dist * Math.cos(r) / LAT_M_PER_DEG);
                     lon += (s.dist * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(c.lat * Math.PI / 180)));
                 }
-                all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
+                // 依照 ZXX-YY 格式命名
+                all.push({ 
+                    lat, 
+                    lon, 
+                    name: `${prefix}-${s.suffix}` 
+                });
             });
         }
     });
