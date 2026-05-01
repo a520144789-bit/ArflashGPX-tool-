@@ -45,11 +45,12 @@
 
 <div class="card">
     <h1>🐼 Suderpanda GPX maker v5.2 🐼</h1>
-    <textarea id="coordsInput" placeholder="在此貼上座標..."></textarea>
+    <textarea id="coordsInput" placeholder="在此貼上原始苗點座標組..."></textarea>
 
     <div class="stats-panel">
         <div class="stats-row">
             <span>載入中心點：<b id="pointCount">0</b></span>
+             <label style="font-size: 13px; font-weight: bold; color: var(--primary);">時速區塊僅供估算行走路徑</label>
             <div>設定時速：<input type="number" id="speedInput" value="19" oninput="updateStats()"> km/h</div>
         </div>
         <div class="stats-row" style="border-top: 1px solid #ddd; padding-top: 5px;">
@@ -58,7 +59,7 @@
         </div>
     </div>
 <div style="margin-bottom: 10px;">
-    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">路徑生成模式：跳躍路徑(使用座標點對點跳躍種花點位)行走路徑(使用固定時速行走種花點位)</label>
+    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">路徑生成模式：跳躍路徑(使用座標點對點跳躍種花點位)．行走路徑(使用固定時速行走種花點位)</label>
     <select id="pathMode" onchange="renderAll(true)">
         <option value="surroundJump">跳躍路徑</option>
         <option value="interact20">行走路徑</option>
@@ -101,7 +102,9 @@
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
         <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 貼入或導入座標..."></textarea>
+        <label style="font-size: ９px; font-weight: bold; color: var(--primary);">此為生成摘果路徑使用（建議使用點對點跳躍採果速度非常快）</label>
         <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 隨機化座標..."></textarea>
+        <label style="font-size: ９px; font-weight: bold; color: var(--primary);">此為提供花農將原始苗點座標在採果判定範圍變換位置防止整套座標被偷去種</label>
     </div>
 
     <div style="margin-bottom: 8px;">
