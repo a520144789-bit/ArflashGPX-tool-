@@ -98,12 +98,11 @@
     <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-top: 8px; margin-bottom: 5px;">
         <button style="background: #2980b9; font-size: 11px;" onclick="importFrom('original')">📥 從原始區導入座標</button>
         <button style="background: #a29bfe; color: #2d3436; font-size: 11px;" onclick="transformToRandom()">🎲 執行隨機座標轉換</button>
-        <label style="font-size: px; font-weight: bold; color: var(--primary);">此為生成摘果路徑使用（建議使用點對點跳躍採果速度非常快）</label>
-        <label style="font-size: ５px; font-weight: bold; color: var(--primary);">此為提供花農將原始苗點座標在採果判定範圍變換位置防止整套座標被偷去種</label>
+        <label style="font-size: ５px; font-weight: bold; color: var(--primary);">座標隨機轉換為提供花農將原始苗點座標在採果判定範圍變換位置防止整套座標被偷去種</label>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-        <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 貼入或導入座標..."></textarea>
+        <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 自行貼入或導入上方已排序座標以供轉換收果或隨機座標..."></textarea>
         
         <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 隨機化座標..."></textarea>
         
@@ -122,6 +121,7 @@
     </select>
     
     <div class="btn-group" style="grid-template-columns: 1fr 1fr;">
+         <label style="font-size: px; font-weight: bold; color: var(--primary);">此區塊按鈕為生成摘果路徑使用（建議使用點對點跳躍採果速度非常快）</label>
         <button style="background: #0984e3; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製對應軟體跳躍採果用GPX</button>
         <button style="background: var(--danger); padding: 12px; border-radius: 10px;" onclick="downloadJumpGPX()">💾 下載對應軟體跳躍採果用GPX</button>
     </div>
