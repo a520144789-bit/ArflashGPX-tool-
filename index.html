@@ -93,19 +93,26 @@
 </div>
 
 <div class="jump-section">
-    <label style="font-size: 13px; font-weight: bold; color: var(--danger);">⚡ 跳躍採果座標轉換器．隨機採果座標生成</label>
+    <!-- 標題部分 -->
+    <label style="font-size: 13px; font-weight: bold; color: var(--danger); display: block; margin-bottom: 10px;">⚡ 跳躍採果座標轉換器．隨機採果座標生成</label>
     
-    <div class="btn-group" style="grid-template-columns: 1fr 1fr; margin-top: 8px; margin-bottom: 5px;">
-        <button style="background: #2980b9; font-size: 11px;" onclick="importFrom('original')">📥 從上方已排序結果導入座標</button>
-        <button style="background: #a29bfe; color: #2d3436; font-size: 11px;" onclick="transformToRandom()">🎲 執行隨機座標轉換</button>
-        <label style="font-size: 11px; font-weight: bold; color: #ff4444; white-space: nowrap; opacity: 0.8;">❗座標隨機轉換為提供花農將原始苗點座標在採果判定範圍變換位置防止整套座標被偷去種❗</label>
+    <!-- 按鈕群組：獨立為兩欄網格 -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+        <button style="background: #2980b9; font-size: 11px; padding: 10px;" onclick="importFrom('original')">📥 從上方已排序結果導入座標</button>
+        <button style="background: #a29bfe; color: #2d3436; font-size: 11px; padding: 10px;" onclick="transformToRandom()">🎲 執行隨機座標轉換</button>
     </div>
 
+    <!-- 紅字提醒：獨立出來，解決換行與對齊問題 -->
+    <div style="margin-bottom: 8px; border-left: 3px solid #ff4444; padding-left: 8px;">
+        <label style="font-size: 10px; font-weight: bold; color: #ff4444; display: block; line-height: 1.4;">
+            ※ 座標隨機轉換：提供將原始座標在判定範圍內變換位置，防止數據外洩。
+        </label>
+    </div>
+
+    <!-- 輸入與結果區 -->
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-        <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 自行貼入或導入上方已排序座標以供轉換收果或隨機座標..."></textarea>
-        
+        <textarea id="jumpInput" style="height: 120px;" placeholder="[輸入] 自行貼入或導入上方已排序座標..."></textarea>
         <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 隨機化座標..."></textarea>
-        
     </div>
 
     <div style="margin-bottom: 8px;">
