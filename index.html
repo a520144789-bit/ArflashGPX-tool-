@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda GPX v5.2</title>
+    <title>Suderpanda GPX v5.3</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐼</text></svg>">
     
     <style>
@@ -58,14 +58,14 @@
         </div>
     </div>
 <div style="margin-bottom: 10px;">
-    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">路徑生成模式：</label>
+    <label style="font-size: 13px; font-weight: bold; color: var(--primary);">路徑生成模式：跳躍路徑(使用座標點對點跳躍種花點位)行走路徑(使用固定時速行走種花點位)</label>
     <select id="pathMode" onchange="renderAll(true)">
-        <option value="interact20">行走路徑 (20邏輯交互)</option>
-        <option value="surroundJump">跳躍路徑 (環繞跳躍)</option>
+        <option value="surroundJump">跳躍路徑</option>
+        <option value="interact20">行走路徑</option>
     </select>
 </div>
     <div style="margin-bottom: 10px;">
-        <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：</label>
+        <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：(選擇使用的飛人軟體格式)</label>
         <select id="gpxFormat">
             <option value="arflash">ARflash (WPT)</option>
             <option value="joystick">JoyStick (TRK)</option>
@@ -232,16 +232,32 @@ function toScreen(lat, lon) {
 }
 
 function handleMapSingleClick(x, y) {
+    const mode = document.getElementById('pathMode').value;
+    const pointsPerGroup = (mode === 'interact20') ? 5 : 15;
+    const allSteps = getAllSteps();
+    
     let clickIdx = -1;
-    for (let i = 0; i < masterCenters.length; i++) {
-        let screenP = toScreen(masterCenters[i].lat, masterCenters[i].lon);
+
+    // 遍歷所有子點位，看看使用者點中了哪一個
+    for (let i = 0; i < allSteps.length; i++) {
+        let screenP = toScreen(allSteps[i].lat, allSteps[i].lon);
         let dist = Math.hypot(screenP.x - x, screenP.y - y);
-        if (dist < 15) { clickIdx = i; break; }
+        
+        // 如果點擊距離小於 15 像素
+        if (dist < 15) { 
+            // 回推它是屬於第幾個母點組 (Group Index)
+            clickIdx = Math.floor(i / pointsPerGroup); 
+            break; 
+        }
     }
+
     if (clickIdx !== -1) {
-        if (selectedIndex === null) selectedIndex = clickIdx;
-        else if (selectedIndex === clickIdx) selectedIndex = null;
-        else {
+        if (selectedIndex === null) {
+            selectedIndex = clickIdx;
+        } else if (selectedIndex === clickIdx) {
+            selectedIndex = null; // 再次點擊相同組則取消選取
+        } else {
+            // 實作交換邏輯
             saveState();
             let it = masterCenters.splice(selectedIndex, 1)[0];
             masterCenters.splice(clickIdx, 0, it);
