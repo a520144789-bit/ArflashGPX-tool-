@@ -105,7 +105,7 @@
     <!-- 紅字提醒：獨立出來，解決換行與對齊問題 -->
     <div style="margin-bottom: 8px; border-left: 3px solid #ff4444; padding-left: 8px;">
         <label style="font-size: 10px; font-weight: bold; color: #ff4444; display: block; line-height: 1.4;">
-            ※ 座標隨機轉換：提供將原始座標在判定範圍內變換位置，防止數據外洩。
+            ※ 座標隨機轉換：提供將原始座標在可採果範圍內變換位置。
         </label>
     </div>
 
@@ -127,11 +127,26 @@
         <option value="ianygo">iAnyGo (TRK)</option>
     </select>
     
-    <div class="btn-group" style="grid-template-columns: 1fr 1fr;">
-         <label style="font-size: 11px; font-weight: bold; color: #ff4444; white-space: nowrap; opacity: 0.8;">🌸此區塊按鈕為生成摘果路徑使用（建議使用點對點跳躍採果速度非常快）🌸</label>
-        <button style="background: #0984e3; padding: 12px; border-radius: 10px;" onclick="copyJumpGPX()">📋 複製對應軟體跳躍採果用GPX</button>
-        <button style="background: var(--danger); padding: 12px; border-radius: 10px;" onclick="downloadJumpGPX()">💾 下載對應軟體跳躍採果用GPX</button>
+    <div class="btn-group-wrapper" style="margin-top: 15px;">
+    <!-- 1. 提醒標籤：獨立於網格之外，確保不影響按鈕寬度 -->
+    <div style="margin-bottom: 8px; text-align: left;">
+        <label style="font-size: 11px; font-weight: bold; color: #ff4444; opacity: 0.9; display: inline-block;">
+            🌸 此區塊按鈕為生成摘果路徑使用（建議使用點對點跳躍採果速度非常快）🌸
+        </label>
     </div>
+
+    <!-- 2. 按鈕群組：嚴格的 1:1 分欄 -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <button style="background: #0984e3; padding: 12px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" 
+                onclick="copyJumpGPX()">
+            📋 複製對應軟體跳躍採果用GPX
+        </button>
+        <button style="background: var(--danger); padding: 12px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" 
+                onclick="downloadJumpGPX()">
+            💾 下載對應軟體跳躍採果用GPX
+        </button>
+    </div>
+</div>
 </div>
 <div id="toast"></div>
 
