@@ -637,23 +637,38 @@ function generateGPX(points, format) {
     const dateStr = (now.getMonth() + 1).toString().padStart(2, '0') + now.getDate().toString().padStart(2, '0');
     const routeName = `Suderpanda_${dateStr}`;
 
-    // 如果是 JoyStick 或 iAnyGo，改用符合規範的 <rte> 結構
-    if (format === 'joystick' || format === 'ianygo') {
+    // 針對 iAnyGo 優化：使用 trk 結構
+    if (format === 'ianygo') {
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        gpx += `<gpx version="1.1" creator="warmwind-gpx">\n`;
+        gpx += `  <metadata><name>${routeName}</name></metadata>\n`;
+        gpx += `  <trk>\n`;
+        gpx += `    <name>${routeName}</name>\n`;
+        gpx += `    <trkseg>\n`;
+        points.forEach(p => {
+            gpx += `      <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"></trkpt>\n`;
+        });
+        gpx += `    </trkseg>\n`;
+        gpx += `  </trk>\n`;
+        gpx += `</gpx>`;
+        return gpx;
+    }
+
+    // 針對 JoyStick 優化：維持你之前的 rte 結構
+    if (format === 'joystick') {
         let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
         gpx += `<gpx version="1.1" creator="GPS JoyStick - Suderpanda">\n`;
         gpx += `  <rte>\n`;
         gpx += `    <name>${routeName}</name>\n`;
         gpx += `    <number>0</number>\n`;
-        
         points.forEach(p => {
             gpx += `    <rtept lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"></rtept>\n`;
         });
-        
         gpx += `  </rte>\n`;
         gpx += `</gpx>`;
         return gpx;
-    } 
-    
+    }
+
     // 其他格式 (WPT) 維持原狀
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="suder-gpx">`;
     gpx += `\n  <metadata><name>${routeName}</name></metadata>`;
