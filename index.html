@@ -343,9 +343,8 @@ function runTSP(points, startIdx) {
 
 function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value.trim();
-    const mode = document.getElementById('pathMode').value; // 取得當前模式
-    
     if (!inputStr) return;
+    
     let raw = [];
     inputStr.split('\n').forEach(line => {
         let p = line.trim().split(/[,|\s\t]+/);
@@ -359,63 +358,47 @@ function analyzePoints() {
     // 去除重複點
     raw = raw.filter((p, i, self) => i === self.findIndex(t => Math.abs(t.lat - p.lat) < 1e-7 && Math.abs(t.lon - p.lon) < 1e-7));
 
+    // --- 蛇行路徑 (S-Shape Scanning) 核心算法 ---
+    
+    // 1. 定義巷道寬度 (約 60-70m，確保覆蓋且不重複過多)
+    const laneWidth = 0.0007; 
+    
+    // 2. 找到東西向邊界並分欄
+    let lons = raw.map(p => p.lon);
+    let maxLon = Math.max(...lons);
+    
+    let groups = {};
+    raw.forEach(p => {
+        // 計算屬於第幾欄 (由東向西)
+        let col = Math.floor((maxLon - p.lon) / laneWidth);
+        if (!groups[col]) groups[col] = [];
+        groups[col].push(p);
+    });
+
+    // 3. 依序合併欄位，並實施蛇行 (一南一北)
     let sortedResult = [];
-
-    if (mode === 'surroundJump') {
-        // --- 針對環繞跳躍優化的 S 型掃描排序 ---
-        
-        // 1. 先由東向西分組 (切成多條縱向巷道)
-        // 我們假設每條巷道的寬度約為 60m (環繞半徑 30m * 2)
-        const laneWidth = 0.0006; // 約 60m 的經度差
-        
-        // 取得東西向邊界
-        let lons = raw.map(p => p.lon);
-        let maxLon = Math.max(...lons);
-        
-        // 按照與最東邊的距離進行分欄 (Column)
-        // 由東向西排：maxLon 是第 0 欄
-        let groups = {};
-        raw.forEach(p => {
-            let col = Math.floor((maxLon - p.lon) / laneWidth);
-            if (!groups[col]) groups[col] = [];
-            groups[col].push(p);
-        });
-
-        // 2. 依序處理每一欄，並交替南北方向
-        let cols = Object.keys(groups).sort((a, b) => a - b); // 由東向西 0, 1, 2...
-        
-        cols.forEach((col, index) => {
-            let columnPoints = groups[col];
-            // 排序緯度：偶數欄由北向南 (降序)，奇數欄由南向北 (升序)
-            if (index % 2 === 0) {
-                columnPoints.sort((a, b) => b.lat - a.lat);
-            } else {
-                columnPoints.sort((a, b) => a.lat - b.lat);
-            }
-            sortedResult.push(...columnPoints);
-        });
-
-    } else {
-        // --- 原本的雙層四象限排序 (針對互動 20) ---
-        let BigQ = splitToFour(raw);
-        let subQ = BigQ.map(q => splitToFour(q));
-        sortedResult.push(...extractOrdered(subQ[0], [3, 0, 1]));
-        sortedResult.push(...extractOrdered(subQ[1], [0, 1, 2]));
-        sortedResult.push(...extractOrdered(subQ[2], [1, 2, 3]));
-        sortedResult.push(...extractOrdered(subQ[3], [2, 3, 0]));
-        sortedResult.push(...extractOrdered(subQ[3], [1]));
-        sortedResult.push(...extractOrdered(subQ[2], [0]));
-        sortedResult.push(...extractOrdered(subQ[1], [3]));
-        sortedResult.push(...extractOrdered(subQ[0], [2]));
-    }
+    let cols = Object.keys(groups).sort((a, b) => a - b);
+    
+    cols.forEach((col, index) => {
+        let columnPoints = groups[col];
+        // 偶數欄：北 -> 南 (緯度降序)
+        // 奇數欄：南 -> 北 (緯度升序)
+        if (index % 2 === 0) {
+            columnPoints.sort((a, b) => b.lat - a.lat);
+        } else {
+            columnPoints.sort((a, b) => a.lat - b.lat);
+        }
+        sortedResult.push(...columnPoints);
+    });
 
     masterCenters = sortedResult;
     historyStack = [JSON.stringify(masterCenters)];
     redoStack = [];
     mapScale = 1; offsetX = 0; offsetY = 0; selectedIndex = null;
     renderAll();
-    showToast(mode === 'surroundJump' ? "🐍 S型掃描排序已完成" : "🔍 雙層四象限排序已完成");
+    showToast("🐍 母點蛇行路徑排序完成");
 }
+
 
 function renderAll(clearSelected = false) {
     if (clearSelected) selectedIndex = null;
