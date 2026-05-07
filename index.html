@@ -59,11 +59,12 @@
         </div>
     </div>
 <div style="margin-bottom: 10px;"> <label style="font-size: 11px; font-weight: bold; color: #ff4444; opacity: 0.8;">💡跳躍路徑(使用座標點對點跳躍種花點位)．行走路徑(使用固定時速行走種花點位)💡</label>
-    <select id="pathMode" onchange="renderAll(true)">       
+ <select id="pathMode" onchange="renderAll(true)">       
     <label style="font-size: 13px; font-weight: bold; color: var(--primary);">路徑生成模式：</label>
-        <option value="surroundJump">跳躍路徑</option>
-        <option value="interact20">行走路徑</option>
-    </select>
+    <option value="surroundJump">跳躍路徑</option>
+    <option value="interact20">行走路徑</option>
+    <option value="doubleLoop">新版跳躍路徑</option> </select>
+
 </div>
     <div style="margin-bottom: 10px;">
         <label style="font-size: 13px; font-weight: bold; color: var(--primary);">輸出格式：(選擇使用的飛人軟體格式)</label>
@@ -260,7 +261,8 @@ function toScreen(lat, lon) {
 
 function handleMapSingleClick(x, y) {
     const mode = document.getElementById('pathMode').value;
-    const pointsPerGroup = (mode === 'interact20') ? 5 : 15;
+const pointsPerGroup = (mode === 'doubleLoop') ? 24 : (mode === 'interact20' ? 5 : 15);
+
     const allSteps = getAllSteps();
     
     let clickIdx = -1;
@@ -467,86 +469,106 @@ function renderAll(clearSelected = false) {
 function getAllSteps() {
     let all = [];
     const mode = document.getElementById('pathMode').value;
-    masterCenters.forEach((c, i) => {
-        const prefix = `Z${String(i + 1).padStart(2, '0')}`;
-        if (mode === 'interact20') {
-            let prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
-            let next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
-            const getQ = (curr, target) => {
-                let dL = target.lat - curr.lat, dO = target.lon - curr.lon;
-                return (dL >= 0 && dO >= 0) ? "NE" : (dL >= 0 && dO < 0) ? "NW" : (dL < 0 && dO < 0) ? "SW" : "SE";
-            };
-            let base = (RULES[`${getQ(c, prev)}_${getQ(c, next)}`] || [45, 135, "01", 225, 315]);
-            let rot = (c.rotation || 0) * 45;
-            base.forEach((s, sub) => {
-                let lat = c.lat, lon = c.lon;
-                if (s !== "01") {
-                    let r = (s + rot) * Math.PI / 180;
-                    lat += (RADIUS * Math.cos(r) / LAT_M_PER_DEG);
-                    lon += (RADIUS * Math.sin(r) / (LAT_M_PER_DEG * Math.cos(c.lat * Math.PI / 180)));
-                }
-                all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
-            });
-                        } else if (mode === 'surroundJump') {
-            // --- v5.3 更新：正六角形邊緣加密 + 縱向中軸線 (15 點位) ---
-            const R = 30; // 半徑 30m
-            const latScale = 0.000009;
-            const lonScale = 0.000009 / Math.cos(c.lat * Math.PI / 180);
+    const latM = 0.000009; // 1公尺約等於的緯度偏移
 
-            // 1. 計算 6 個頂點 (從正北 0° 開始，每 60° 一個)
-            let vertices = [];
-            for (let i = 0; i < 6; i++) {
-                let angleRad = (i * 60) * Math.PI / 180;
-                vertices.push({
-                    lat: c.lat + (R * Math.cos(angleRad) * latScale),
-                    lon: c.lon + (R * Math.sin(angleRad) * lonScale)
-                });
-            }
+    // --- 模式：強化種植 (大循環規則：全 R1 跑完才跑 全 R2) ---
+    if (mode === 'doubleLoop') {
+        // 第一階段：所有母點的 R1 大循環
+        masterCenters.forEach((c, i) => {
+            const prefix = `Z${String(i + 1).padStart(2, '0')}-R1`;
+            const oM = latM / Math.cos(c.lat * Math.PI / 180);
+            const R = 30; // 六角形半徑
 
-            // 2. 構建 01-12 點位 (頂點 -> 邊中點 順時針繞行)
-            let perimeterPoints = [];
-            for (let i = 0; i < 6; i++) {
-                let currentV = vertices[i];
-                let nextV = vertices[(i + 1) % 6];
-                
+            // R1-1: 外圈六角形 (1-12點)
+            for (let j = 0; j < 6; j++) {
+                let angle = (j * 60) * Math.PI / 180;
+                let nextAngle = ((j + 1) * 60) * Math.PI / 180;
                 // 頂點
-                perimeterPoints.push({ lat: currentV.lat, lon: currentV.lon, suffix: (i * 2 + 1) });
-                // 邊中點 (幾何平均)
-                perimeterPoints.push({ 
-                    lat: (currentV.lat + nextV.lat) / 2, 
-                    lon: (currentV.lon + nextV.lon) / 2, 
-                    suffix: (i * 2 + 2) 
+                all.push({ 
+                    lat: c.lat + R * Math.cos(angle) * latM, 
+                    lon: c.lon + R * Math.sin(angle) * oM, 
+                    name: `${prefix}-${String(j * 2 + 1).padStart(2, '0')}` 
+                });
+                // 邊中點
+                all.push({ 
+                    lat: c.lat + (R * Math.cos(angle) + R * Math.cos(nextAngle)) / 2 * latM, 
+                    lon: c.lon + (R * Math.sin(angle) + R * Math.sin(nextAngle)) / 2 * oM, 
+                    name: `${prefix}-${String(j * 2 + 2).padStart(2, '0')}` 
                 });
             }
+            // R1-2: 中軸線 (13-15點)
+            all.push({ lat: c.lat + 15 * latM, lon: c.lon, name: `${prefix}-13-N` });
+            all.push({ lat: c.lat, lon: c.lon, name: `${prefix}-14-C` });
+            all.push({ lat: c.lat - 15 * latM, lon: c.lon, name: `${prefix}-15-S` });
+        });
 
-            // 3. 輸出 1-12 點
-            perimeterPoints.forEach(p => {
-                all.push({ 
-                    lat: p.lat, 
-                    lon: p.lon, 
-                    name: `${prefix}-${String(p.suffix).padStart(2, '0')}` 
-                });
-            });
+        // 第二階段：所有母點的 R2 大循環
+        masterCenters.forEach((c, i) => {
+            const prefix = `Z${String(i + 1).padStart(2, '0')}-R2`;
+            const oM = latM / Math.cos(c.lat * Math.PI / 180);
+            const d = 15; // 1 Delta = 15m
 
-            // 4. 輸出 13-15 中軸線點位
-            const axisSteps = [
-                { latOff: 15 * latScale,  lonOff: 0, suffix: "13-N15" },
-                { latOff: 0,              lonOff: 0, suffix: "14-C"   },
-                { latOff: -15 * latScale, lonOff: 0, suffix: "15-S15" }
+            // R2: 內圈 9 點正方形 (順時針繞行)
+            const squareOffsets = [
+                [d, 0], [d, d], [0, d], [-d, d], [-d, 0], [-d, -d], [0, -d], [d, -d], [d, 0]
             ];
-
-            axisSteps.forEach(s => {
-                all.push({
-                    lat: c.lat + s.latOff,
-                    lon: c.lon + s.lonOff,
-                    name: `${prefix}-${s.suffix}`
+            squareOffsets.forEach((pos, idx) => {
+                all.push({ 
+                    lat: c.lat + pos[0] * latM, 
+                    lon: c.lon + pos[1] * oM, 
+                    name: `${prefix}-${idx + 1}` 
                 });
             });
-        }
+        });
+    } 
+    
+    // --- 其他模式：逐個母點處理 (跳躍模式 或 行走路徑) ---
+    else {
+        masterCenters.forEach((c, i) => {
+            const prefix = `Z${String(i + 1).padStart(2, '0')}`;
+            const oM = latM / Math.cos(c.lat * Math.PI / 180);
 
-    });
+            if (mode === 'interact20') {
+                // 行走路徑 (5點)
+                let prev = masterCenters[i > 0 ? i - 1 : masterCenters.length - 1];
+                let next = masterCenters[i < masterCenters.length - 1 ? i + 1 : 0];
+                const getQ = (curr, target) => {
+                    let dL = target.lat - curr.lat, dO = target.lon - curr.lon;
+                    return (dL >= 0 && dO >= 0) ? "NE" : (dL >= 0 && dO < 0) ? "NW" : (dL < 0 && dO < 0) ? "SW" : "SE";
+                };
+                let base = (RULES[`${getQ(c, prev)}_${getQ(c, next)}`] || [45, 135, "01", 225, 315]);
+                let rot = (c.rotation || 0) * 45;
+                base.forEach((s, sub) => {
+                    let lat = c.lat, lon = c.lon;
+                    if (s !== "01") {
+                        let r = (s + rot) * Math.PI / 180;
+                        lat += (36 * Math.cos(r) / 111132); // 使用原本 RADIUS=36
+                        lon += (36 * Math.sin(r) / (111132 * Math.cos(c.lat * Math.PI / 180)));
+                    }
+                    all.push({ lat, lon, name: `${prefix}-${String(sub + 1).padStart(2, '0')}` });
+                });
+            } else if (mode === 'surroundJump') {
+                // 跳躍模式 (15點正六角+中軸)
+                const R = 30;
+                let vertices = [];
+                for (let j = 0; j < 6; j++) {
+                    let angleRad = (j * 60) * Math.PI / 180;
+                    vertices.push({ lat: c.lat + (R * Math.cos(angleRad) * latM), lon: c.lon + (R * Math.sin(angleRad) * oM) });
+                }
+                for (let j = 0; j < 6; j++) {
+                    let curV = vertices[j], nxtV = vertices[(j + 1) % 6];
+                    all.push({ lat: curV.lat, lon: curV.lon, name: `${prefix}-${String(j * 2 + 1).padStart(2, '0')}` });
+                    all.push({ lat: (curV.lat + nxtV.lat) / 2, lon: (curV.lon + nxtV.lon) / 2, name: `${prefix}-${String(j * 2 + 2).padStart(2, '0')}` });
+                }
+                all.push({ lat: c.lat + 15 * latM, lon: c.lon, name: `${prefix}-13-N` });
+                all.push({ lat: c.lat, lon: c.lon, name: `${prefix}-14-C` });
+                all.push({ lat: c.lat - 15 * latM, lon: c.lon, name: `${prefix}-15-S` });
+            }
+        });
+    }
     return all;
 }
+
 
 // --- 介面同步與工具 ---
 function renderList() {
