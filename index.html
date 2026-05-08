@@ -154,7 +154,6 @@ window.onload = () => {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // 拖動與縮放邏輯 (保留原始)
     canvas.addEventListener('touchstart', (e) => { 
         if (e.touches.length === 2) { 
             initialPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); 
@@ -213,7 +212,6 @@ function clearAllFields() {
     }
 }
 
-// 蛇行排序邏輯
 function analyzePoints() {
     const inputStr = document.getElementById('coordsInput').value.trim();
     if (!inputStr) return;
@@ -249,7 +247,6 @@ function analyzePoints() {
     saveState(); renderAll(); showToast("🐍 蛇行路徑完成");
 }
 
-// 保留原始 toScreen 縮放邏輯
 function toScreen(lat, lon) {
     const rect = canvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
@@ -265,7 +262,6 @@ function toScreen(lat, lon) {
     return { x: (x - w/2) * mapScale + w/2 + offsetX * mapScale, y: (y - h/2) * mapScale + h/2 + offsetY * mapScale };
 }
 
-// 原始 getAllSteps 邏輯
 function getAllSteps() {
     let all = [];
     const mode = document.getElementById('pathMode').value;
@@ -331,7 +327,6 @@ function getAllSteps() {
     return all;
 }
 
-// 其他輔助函數
 function handleMapSingleClick(x, y) {
     const mode = document.getElementById('pathMode').value;
     const pG = (mode==='doubleLoop') ? 24 : (mode==='interact20'?5:15);
@@ -418,12 +413,85 @@ function transformToRandom() {
     document.getElementById('randomResult').value = res.join('\n');
 }
 
+// --- 修正後的 GPX 生成與功能邏輯 ---
+
+function generateGPX(points, format) {
+    if (!points || points.length === 0) return "";
+    const now = new Date();
+    const dateStr = (now.getMonth() + 1).toString().padStart(2, '0') + now.getDate().toString().padStart(2, '0');
+    const routeName = `Suderpanda_${dateStr}`;
+
+    // TRK 模式 (iAnyGo, JoyStick TRK)
+    if (format === 'ianygo' || format === 'joystick') {
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda">\n`;
+        gpx += `  <trk><name>${routeName}</name><trkseg>\n`;
+        points.forEach(p => {
+            gpx += `    <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"></trkpt>\n`;
+        });
+        gpx += `  </trkseg></trk>\n</gpx>`;
+        return gpx;
+    }
+
+    // WPT 模式 (ARflash, 魅影, FakeGPS)
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Suderpanda">\n`;
+    gpx += `  <metadata><name>${routeName}</name></metadata>\n`;
+    points.forEach((p, i) => { 
+        gpx += `  <wpt lat="${p.lat.toFixed(7)}" lon="${p.lon.toFixed(7)}"><name>${p.name || 'P'+(i+1)}</name></wpt>\n`; 
+    });
+    gpx += `</gpx>`;
+    return gpx;
+}
+
+function copyToClipboard() {
+    const pts = getAllSteps();
+    if (pts.length === 0) return showToast("⚠️ 無資料");
+    const gpx = generateGPX(pts, document.getElementById('gpxFormat').value);
+    navigator.clipboard.writeText(gpx).then(() => showToast("✅ GPX已複製"));
+}
+
+function downloadFinalGPX() {
+    const pts = getAllSteps();
+    if (pts.length === 0) return showToast("⚠️ 無資料");
+    const gpx = generateGPX(pts, document.getElementById('gpxFormat').value);
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Suderpanda_${Date.now()}.gpx`;
+    a.click();
+    showToast("💾 下載中");
+}
+
+function getJumpPoints() {
+    const raw = document.getElementById('randomResult').value || document.getElementById('jumpInput').value;
+    let pts = [];
+    raw.split('\n').forEach((line, i) => {
+        let p = line.split(/[,|\s\t]+/);
+        if (p.length >= 2) pts.push({ lat: parseFloat(p[0]), lon: parseFloat(p[1]), name: `JUMP-${i+1}` });
+    });
+    return pts;
+}
+
+function copyJumpGPX() {
+    const pts = getJumpPoints();
+    if (pts.length === 0) return showToast("⚠️ 無座標");
+    const gpx = generateGPX(pts, document.getElementById('jumpGpxFormat').value);
+    navigator.clipboard.writeText(gpx).then(() => showToast("✅ 跳躍GPX已複製"));
+}
+
+function downloadJumpGPX() {
+    const pts = getJumpPoints();
+    if (pts.length === 0) return showToast("⚠️ 無座標");
+    const gpx = generateGPX(pts, document.getElementById('jumpGpxFormat').value);
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Jump_${Date.now()}.gpx`;
+    a.click();
+    showToast("💾 下載中");
+}
+
 function copySourceContent() { navigator.clipboard.writeText(document.getElementById('jumpInput').value).then(() => showToast("📋 已複製")); }
 function copyRandomContent() { navigator.clipboard.writeText(document.getElementById('randomResult').value).then(() => showToast("📋 已複製")); }
-function copyToClipboard() { showToast("✅ GPX已複製"); }
-function copyJumpGPX() { showToast("✅ 跳躍GPX已複製"); }
-function downloadFinalGPX() { showToast("💾 下載中"); }
-function downloadJumpGPX() { showToast("💾 下載中"); }
 function saveState() { historyStack.push(JSON.stringify(masterCenters)); if (historyStack.length > MAX_HISTORY) historyStack.shift(); }
 function undo() { if (historyStack.length > 1) { historyStack.pop(); masterCenters = JSON.parse(historyStack[historyStack.length-1]); renderAll(); } }
 function redo() { showToast("目前不支援重做"); }
