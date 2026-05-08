@@ -116,9 +116,17 @@
         <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 隨機化座標..."></textarea>
     </div>
 
-    <div style="margin-bottom: 8px;">
-        <button style="background: #27ae60; width: 100%; padding: 10px; border-radius: 10px; font-size: 11px;" onclick="copyRandomContent()">📋 複製隨機座標文本</button>
-    </div>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+    <button style="background: #3498db; padding: 10px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" 
+            onclick="copySourceContent()">
+        📋 複製已排序座標組
+    </button>
+    <button style="background: #27ae60; padding: 10px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" 
+            onclick="copyRandomContent()">
+        📋 複製隨機座標文本
+    </button>
+</div>
+
 
     <select id="jumpGpxFormat" style="margin-bottom: 8px;">
         <option value="arflash">ARflash (WPT)</option>
@@ -703,9 +711,18 @@ function downloadJumpGPX() {
     a.download = `Jump_${Date.now()}.gpx`;
     a.click();
 }
+// 新增：複製左側輸入框（已排序座標）的內容
+function copySourceContent() {
+    const content = document.getElementById('jumpInput').value.trim();
+    if (!content) return showToast("左側輸入框沒有內容可複製");
+    
+    navigator.clipboard.writeText(content).then(() => {
+        showToast("📋 已排序座標組已複製");
+    });
+}
 
 function copyToClipboard() { navigator.clipboard.writeText(generateGPX(getAllSteps(), document.getElementById('gpxFormat').value)).then(() => showToast("✅ 已複製 GPX")); }
-function copyRandomContent() { navigator.clipboard.writeText(document.getElementById('randomResult').value).then(() => showToast("📋 隨機座標已複製")); }
+fu跑nction copyRandomContent() { navigator.clipboard.writeText(document.getElementById('randomResult').value).then(() => showToast("📋 隨機座標已複製")); }
 function copyJumpGPX() { navigator.clipboard.writeText(generateGPX(getJumpPoints(), document.getElementById('jumpGpxFormat').value)).then(() => showToast("✅ 已複製跳躍 GPX")); }
 function saveState() { historyStack.push(JSON.stringify(masterCenters)); if (historyStack.length > MAX_HISTORY) historyStack.shift(); redoStack = []; }
 function undo() { if (historyStack.length <= 1) return; redoStack.push(historyStack.pop()); masterCenters = JSON.parse(historyStack[historyStack.length - 1]); renderAll(); }
