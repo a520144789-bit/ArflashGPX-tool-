@@ -44,14 +44,14 @@
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda種花.採果GPX路徑生成工具 v5.5 🐼</h1>
+    <h1>🐼 Suderpanda種花.採果GPX路徑生成工具 v6.0 🐼</h1>
     <textarea id="coordsInput" placeholder="在此貼上原始苗點座標組..."></textarea>
 
     <div class="stats-panel">
         <div class="stats-row">
             <span>載入中心點：<b id="pointCount">0</b></span>
             <div>
-                <label style="font-size: 11px; font-weight: bold; color: #ff4444; opacity: 0.8;">🚨時速區塊僅供估算</label>
+                <label style="font-size: 11px; font-weight: bold; color: #ff4444; opacity: 0.8;">🚨時速區塊僅供行走路徑估算</label>
                 <div>設定時速：<input type="number" id="speedInput" value="19" oninput="updateStats()"> km/h</div>
             </div>
         </div>
@@ -63,10 +63,11 @@
 
     <div style="margin-bottom: 10px;"> 
         <label style="font-size: 11px; font-weight: bold; color: #ff4444; opacity: 0.8;">💡路徑模式選擇💡</label>
-        <select id="pathMode" onchange="renderAll(true)">       
-            <option value="surroundJump">跳躍路徑</option>
+         <label style="font-size: 11px; font-weight: bold; color: #ff4444; opacity: 0.8;">🚨跳躍模式為app內部設定請參照各家app是否支援</label>
+        <select id="pathMode" onchange="renderAll(true)">  
+             <option value="doubleLoop">跳躍路徑2.0(建議帶滿40隻皮）</option> 
             <option value="interact20">行走路徑</option>
-            <option value="doubleLoop">新版跳躍路徑(強化種植)</option> 
+            <option value="surroundJump">跳躍路徑1.0</option>
         </select>
     </div>
 
