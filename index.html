@@ -463,10 +463,28 @@ function downloadFinalGPX() {
 
 function getJumpPoints() {
     const raw = document.getElementById('randomResult').value || document.getElementById('jumpInput').value;
+    if (!raw.trim()) return [];
+
     let pts = [];
-    raw.split('\n').forEach((line, i) => {
-        let p = line.split(/[,|\s\t]+/);
-        if (p.length >= 2) pts.push({ lat: parseFloat(p[0]), lon: parseFloat(p[1]), name: `JUMP-${i+1}` });
+    const lines = raw.trim().split('\n');
+
+    lines.forEach((line, i) => {
+        const parts = line.trim().split(/[,|\s\t]+/);
+        if (parts.length >= 2) {
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            
+            if (!isNaN(lat) && !isNaN(lon)) {
+                // 計算 5 公尺的經度偏移量
+                const lonOffset5m = 5 / (111132 * Math.cos(lat * Math.PI / 180));
+                
+                const prefix = `J${i + 1}`;
+                // 產生三點序列：西(W) -> 中(C) -> 東(E)
+                pts.push({ lat: lat, lon: lon - lonOffset5m, name: `${prefix}W` });
+                pts.push({ lat: lat, lon: lon, name: `${prefix}C` });
+                pts.push({ lat: lat, lon: lon + lonOffset5m, name: `${prefix}E` });
+            }
+        }
     });
     return pts;
 }
