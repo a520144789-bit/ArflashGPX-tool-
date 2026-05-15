@@ -115,10 +115,14 @@
         <textarea id="randomResult" style="height: 120px; background: #f0fdf4;" readonly placeholder="[結果] 隨機化..."></textarea>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-        <button style="background: #3498db; padding: 10px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" onclick="copySourceContent()">📋 複製已排序座標組</button>
-        <button style="background: #27ae60; padding: 10px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" onclick="copyRandomContent()">📋 複製隨機座標文本</button>
-    </div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; margin-bottom: 8px;">
+    <button style="background: #ff9f43; padding: 10px 2px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" onclick="pasteToJumpInput()">📋 貼上</button>
+    
+    <button style="background: #3498db; padding: 10px 2px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" onclick="copySourceContent()">📋 複製排序</button>
+    
+    <button style="background: #27ae60; padding: 10px 2px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white;" onclick="copyRandomContent()">📋 複製隨機座標文本</button>
+</div>
+
 
     <select id="jumpGpxFormat" style="margin-bottom: 8px;">
         <option value="arflash">ARflash (WPT)</option>
@@ -494,6 +498,19 @@ function copyJumpGPX() {
     if (pts.length === 0) return showToast("⚠️ 無座標");
     const gpx = generateGPX(pts, document.getElementById('jumpGpxFormat').value);
     navigator.clipboard.writeText(gpx).then(() => showToast("✅ 跳躍GPX已複製"));
+}
+async function pasteToJumpInput() {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+            document.getElementById('jumpInput').value = text;
+            showToast("📥 已貼上內容");
+        } else {
+            showToast("⚠️ 剪貼簿是空的");
+        }
+    } catch (err) {
+        showToast("❌ 瀏覽器限制，請長按貼上");
+    }
 }
 
 function downloadJumpGPX() {
