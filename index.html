@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Suderpanda種花.採果GPX路徑生成工具 v6.1</title>
+    <title>Suderpanda種花.採果GPX路徑生成工具 v6.2</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐼</text></svg>">
     
     <style>
@@ -44,7 +44,7 @@
 <body>
 
 <div class="card">
-    <h1>🐼 Suderpanda種花.採果GPX路徑生成工具 v6.0 🐼</h1>
+    <h1>🐼 Suderpanda種花.採果GPX路徑生成工具 v6.2 🐼</h1>
     <textarea id="coordsInput" placeholder="在此貼上原始苗點座標組..."></textarea>
 
     <div class="stats-panel">
@@ -408,10 +408,18 @@ function transformToRandom() {
         let p = line.split(/[,|\s\t]+/);
         if (p.length >= 2) {
             let lat = parseFloat(p[0]), lon = parseFloat(p[1]);
-            let angle = Math.random()*Math.PI*2, dist = Math.sqrt(Math.random())*30;
-            let oLat = (dist*Math.cos(angle))/LAT_M_PER_DEG;
-            let oLon = (dist*Math.sin(angle))/(LAT_M_PER_DEG*Math.cos(lat*Math.PI/180));
-            res.push(`${(lat+oLat).toFixed(6)},${(lon+oLon).toFixed(6)}`);
+            
+            // 隨機方向不變
+            let angle = Math.random() * Math.PI * 2; 
+            
+            // --- 核心修改：距離限制在 45m 以上、60m 以下 ---
+            // 基礎值 45 + (隨機 0~1 * 區間長度 15)
+            let dist = 45 + (Math.random() * 15);
+            
+            let oLat = (dist * Math.cos(angle)) / LAT_M_PER_DEG;
+            let oLon = (dist * Math.sin(angle)) / (LAT_M_PER_DEG * Math.cos(lat * Math.PI / 180));
+            
+            res.push(`${(lat + oLat).toFixed(6)},${(lon + oLon).toFixed(6)}`);
         }
     });
     document.getElementById('randomResult').value = res.join('\n');
@@ -479,14 +487,14 @@ function getJumpPoints() {
             const lon = parseFloat(parts[1]);
             
             if (!isNaN(lat) && !isNaN(lon)) {
-                // 計算 5 公尺的經度偏移量
-                const lonOffset5m = 5 / (111132 * Math.cos(lat * Math.PI / 180));
+                // --- 核心修改：10 公尺的經度偏移量 ---
+                const lonOffset10m = 10 / (111132 * Math.cos(lat * Math.PI / 180));
                 
                 const prefix = `J${i + 1}`;
-                // 產生三點序列：西(W) -> 中(C) -> 東(E)
-                pts.push({ lat: lat, lon: lon - lonOffset5m, name: `${prefix}W` });
+                // 產生三點序列：西(W) -> 中(C) -> 東(E)，點與點間距為 10m
+                pts.push({ lat: lat, lon: lon - lonOffset10m, name: `${prefix}W` });
                 pts.push({ lat: lat, lon: lon, name: `${prefix}C` });
-                pts.push({ lat: lat, lon: lon + lonOffset5m, name: `${prefix}E` });
+                pts.push({ lat: lat, lon: lon + lonOffset10m, name: `${prefix}E` });
             }
         }
     });
